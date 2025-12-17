@@ -32,14 +32,17 @@ A Next.js-based AI-powered meal planning application that helps users create wee
 - **Radix UI** - Accessible primitives
 
 ### AI Integration
-- **Anthropic Claude API**
+- **Vercel AI SDK** - AI orchestration and streaming
+  - `@ai-sdk/anthropic` - Claude provider integration
+  - `@ai-sdk/react` - React hooks for chat UIs
   - Conversational meal planning coach
   - Recipe generation/modification
   - Dietary constraint adherence
   - Ingredient substitutions
+  - Built-in streaming and tool calling support
 
 ### Additional Libraries
-- **Zod** - Schema validation
+- **Zod** - Schema validation (also used for AI tool schemas)
 - **React Hook Form** - Form handling
 - **next-themes** - Dark mode support
 - **sonner** - Toast notifications
@@ -585,7 +588,7 @@ NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 
-# Anthropic
+# Anthropic (used by Vercel AI SDK)
 ANTHROPIC_API_KEY=
 
 # App
