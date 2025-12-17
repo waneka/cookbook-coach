@@ -14,7 +14,7 @@ export default function MealPlansPage() {
           </p>
         </div>
         <Button asChild>
-          <Link href="/dashboard/meal-plans/new">
+          <Link href="/meal-plans/new">
             <Plus className="h-4 w-4 mr-2" />
             New Meal Plan
           </Link>

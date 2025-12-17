@@ -26,7 +26,7 @@ export default async function DashboardPage() {
             <div className="text-2xl font-bold">0</div>
             <p className="text-xs text-muted-foreground">saved recipes</p>
             <Button size="sm" className="mt-4" asChild>
-              <Link href="/dashboard/recipes/new">
+              <Link href="/recipes/new">
                 <Plus className="h-4 w-4 mr-2" />
                 Add Recipe
               </Link>
@@ -43,7 +43,7 @@ export default async function DashboardPage() {
             <div className="text-2xl font-bold">0</div>
             <p className="text-xs text-muted-foreground">active plans</p>
             <Button size="sm" className="mt-4" asChild>
-              <Link href="/dashboard/meal-plans/new">
+              <Link href="/meal-plans/new">
                 <Plus className="h-4 w-4 mr-2" />
                 New Plan
               </Link>
@@ -60,7 +60,7 @@ export default async function DashboardPage() {
             <div className="text-2xl font-bold">0</div>
             <p className="text-xs text-muted-foreground">active lists</p>
             <Button size="sm" className="mt-4" variant="outline" asChild>
-              <Link href="/dashboard/shopping-lists">View Lists</Link>
+              <Link href="/shopping-lists">View Lists</Link>
             </Button>
           </CardContent>
         </Card>
@@ -75,7 +75,7 @@ export default async function DashboardPage() {
               Chat with your meal planning assistant
             </p>
             <Button size="sm" className="w-full" asChild>
-              <Link href="/dashboard/coach">
+              <Link href="/coach">
                 <MessageSquare className="h-4 w-4 mr-2" />
                 Start Chat
               </Link>
