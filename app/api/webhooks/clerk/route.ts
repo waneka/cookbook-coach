@@ -1,7 +1,7 @@
 import { Webhook } from 'svix'
 import { headers } from 'next/headers'
 import { WebhookEvent } from '@clerk/nextjs/server'
-import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/service'
 
 export async function POST(req: Request) {
   // Get the Svix headers for verification
@@ -47,7 +47,7 @@ export async function POST(req: Request) {
     const { id, email_addresses, first_name, last_name } = evt.data
 
     try {
-      const supabase = await createClient()
+      const supabase = createServiceClient()
 
       // Upsert user in Supabase
       const { error } = await supabase
@@ -79,7 +79,7 @@ export async function POST(req: Request) {
     const { id } = evt.data
 
     try {
-      const supabase = await createClient()
+      const supabase = createServiceClient()
 
       const { error } = await supabase
         .from('users')

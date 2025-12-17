@@ -11,32 +11,32 @@ export function Navbar() {
     <nav className="border-b">
       <div className="container mx-auto flex h-16 items-center justify-between px-4">
         <div className="flex items-center gap-6">
-          <Link href="/dashboard" className="flex items-center gap-2 font-semibold">
+          <Link href="/" className="flex items-center gap-2 font-semibold">
             <ChefHat className="h-6 w-6" />
             <span>Cookbook Coach</span>
           </Link>
 
           <div className="hidden md:flex items-center gap-2">
             <Button variant="ghost" size="sm" asChild>
-              <Link href="/dashboard/recipes">
+              <Link href="/recipes">
                 <BookOpen className="h-4 w-4 mr-2" />
                 Recipes
               </Link>
             </Button>
             <Button variant="ghost" size="sm" asChild>
-              <Link href="/dashboard/meal-plans">
+              <Link href="/meal-plans">
                 <Calendar className="h-4 w-4 mr-2" />
                 Meal Plans
               </Link>
             </Button>
             <Button variant="ghost" size="sm" asChild>
-              <Link href="/dashboard/shopping-lists">
+              <Link href="/shopping-lists">
                 <ShoppingCart className="h-4 w-4 mr-2" />
                 Shopping Lists
               </Link>
             </Button>
             <Button variant="ghost" size="sm" asChild>
-              <Link href="/dashboard/coach">
+              <Link href="/coach">
                 <MessageSquare className="h-4 w-4 mr-2" />
                 AI Coach
               </Link>
