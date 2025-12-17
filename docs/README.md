@@ -10,6 +10,8 @@ Welcome to the Cookbook Coach documentation! This living documentation will help
 ### Architecture & Design
 - **[Architecture Overview](./architecture.md)** - System design, patterns, tech stack, and architectural decisions
 - **[Database Schema](./database-schema.md)** - Complete database schema with tables, relationships, RLS policies, and common queries
+- **[AI Integration Guide](./ai-integration.md)** - Complete guide to using Vercel AI SDK with Claude
+- **[AI SDK Comparison](./ai-sdk-comparison.md)** - Analysis: Vercel AI SDK vs. Anthropic SDK
 
 ### Implementation Plans
 - **[Main Implementation Plan](../plans/meal-planner-app-implementation.md)** - Comprehensive plan with phases, tasks, and deliverables
