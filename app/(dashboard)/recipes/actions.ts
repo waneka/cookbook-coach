@@ -41,7 +41,7 @@ export async function createRecipe(data: RecipeFormValues) {
         cook_time_minutes: validated.cook_time_minutes || null,
         servings: validated.servings || null,
         ingredients: validated.ingredients as any,
-        instructions: validated.instructions as any,
+        instructions: validated.instructions.map(i => i.value) as any,
         tags: validated.tags,
         image_url: validated.image_url || null,
         nutrition_info: validated.nutrition_info as any,
@@ -81,7 +81,7 @@ export async function updateRecipe(id: string, data: RecipeFormValues) {
       throw new Error('Recipe not found or unauthorized')
     }
 
-    const { data: recipe, error } = await supabase
+    const { data: recipe, error} = await supabase
       .from('recipes')
       .update({
         title: validated.title,
@@ -91,7 +91,7 @@ export async function updateRecipe(id: string, data: RecipeFormValues) {
         cook_time_minutes: validated.cook_time_minutes || null,
         servings: validated.servings || null,
         ingredients: validated.ingredients as any,
-        instructions: validated.instructions as any,
+        instructions: validated.instructions.map(i => i.value) as any,
         tags: validated.tags,
         image_url: validated.image_url || null,
         nutrition_info: validated.nutrition_info as any,

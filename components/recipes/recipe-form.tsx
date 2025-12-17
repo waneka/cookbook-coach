@@ -40,7 +40,7 @@ export function RecipeForm({ recipe, mode }: RecipeFormProps) {
           cook_time_minutes: recipe.cook_time_minutes || undefined,
           servings: recipe.servings || 4,
           ingredients: recipe.ingredients,
-          instructions: recipe.instructions,
+          instructions: recipe.instructions.map(i => ({ value: i })),
           tags: recipe.tags || [],
           image_url: recipe.image_url || undefined,
           nutrition_info: recipe.nutrition_info || undefined,
@@ -48,7 +48,7 @@ export function RecipeForm({ recipe, mode }: RecipeFormProps) {
         }
       : {
           ingredients: [{ item: '', amount: '', unit: '' }],
-          instructions: [''],
+          instructions: [{ value: '' }],
           tags: [],
           is_public: false,
           servings: 4,
@@ -256,7 +256,7 @@ export function RecipeForm({ recipe, mode }: RecipeFormProps) {
                 placeholder="Describe this step..."
                 rows={2}
                 className="flex-1"
-                {...register(`instructions.${index}`)}
+                {...register(`instructions.${index}.value`)}
               />
               {instructionFields.length > 1 && (
                 <Button
@@ -274,7 +274,7 @@ export function RecipeForm({ recipe, mode }: RecipeFormProps) {
             type="button"
             variant="outline"
             size="sm"
-            onClick={() => appendInstruction('')}
+            onClick={() => appendInstruction({ value: '' })}
           >
             <Plus className="h-4 w-4 mr-2" />
             Add Step
