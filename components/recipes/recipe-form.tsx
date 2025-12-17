@@ -34,17 +34,17 @@ export function RecipeForm({ recipe, mode }: RecipeFormProps) {
     defaultValues: recipe
       ? {
           title: recipe.title,
-          description: recipe.description || '',
-          source_url: recipe.source_url || '',
+          description: recipe.description || undefined,
+          source_url: recipe.source_url || undefined,
           prep_time_minutes: recipe.prep_time_minutes || undefined,
           cook_time_minutes: recipe.cook_time_minutes || undefined,
           servings: recipe.servings || 4,
           ingredients: recipe.ingredients,
           instructions: recipe.instructions,
           tags: recipe.tags || [],
-          image_url: recipe.image_url || '',
-          nutrition_info: recipe.nutrition_info,
-          is_public: recipe.is_public,
+          image_url: recipe.image_url || undefined,
+          nutrition_info: recipe.nutrition_info || undefined,
+          is_public: recipe.is_public ?? false,
         }
       : {
           ingredients: [{ item: '', amount: '', unit: '' }],

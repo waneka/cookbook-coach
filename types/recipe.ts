@@ -8,7 +8,7 @@ export type RecipeUpdate = Database['public']['Tables']['recipes']['Update']
 // Ingredient structure
 export interface Ingredient {
   item: string
-  amount: number | string
+  amount: string
   unit?: string
   notes?: string
 }
