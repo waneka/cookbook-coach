@@ -24,18 +24,9 @@ export const recipeFormSchema = z.object({
   title: z.string().min(1, 'Recipe title is required').max(200, 'Title is too long'),
   description: z.string().max(1000, 'Description is too long').optional(),
   source_url: z.string().url('Invalid URL').optional().or(z.literal('')),
-  prep_time_minutes: z.preprocess(
-    (val) => (val === '' || val === null || isNaN(Number(val)) ? undefined : Number(val)),
-    z.number().int().min(0).max(1440).optional()
-  ),
-  cook_time_minutes: z.preprocess(
-    (val) => (val === '' || val === null || isNaN(Number(val)) ? undefined : Number(val)),
-    z.number().int().min(0).max(1440).optional()
-  ),
-  servings: z.preprocess(
-    (val) => (val === '' || val === null || isNaN(Number(val)) ? 4 : Number(val)),
-    z.number().int().min(1).max(100)
-  ),
+  prep_time_minutes: z.number().int().min(0).max(1440).nullable().optional(),
+  cook_time_minutes: z.number().int().min(0).max(1440).nullable().optional(),
+  servings: z.number().int().min(1).max(100).default(4),
   ingredients: z.array(ingredientSchema).min(1, 'At least one ingredient is required'),
   instructions: z.array(z.string().min(1, 'Instruction cannot be empty')).min(1, 'At least one instruction is required'),
   tags: z.array(z.string()).default([]),
