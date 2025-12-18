@@ -1,5 +1,5 @@
 import { anthropic } from '@ai-sdk/anthropic'
-import { streamText } from 'ai'
+import { streamText, convertToModelMessages } from 'ai'
 import { auth } from '@clerk/nextjs/server'
 
 export const maxDuration = 30
@@ -15,7 +15,7 @@ export async function POST(req: Request) {
 
     const result = streamText({
       model: anthropic('claude-sonnet-4-20250514'),
-      messages,
+      messages: convertToModelMessages(messages),
       system: `You are a helpful meal planning and cooking assistant. You help users:
 - Plan balanced, healthy meals
 - Discover new recipes
@@ -29,7 +29,7 @@ When discussing recipes, consider nutritional balance, variety, and the user's p
       maxTokens: 2000,
     })
 
-    return result.toDataStreamResponse()
+    return result.toUIMessageStreamResponse()
   } catch (error) {
     console.error('Chat error:', error)
     return new Response('Internal Server Error', { status: 500 })
