@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useForm, useFieldArray } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { recipeFormSchema, type RecipeFormValues } from '@/lib/validations/recipe'
@@ -9,10 +9,10 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Plus, Trash2, Loader2 } from 'lucide-react'
+import { Plus, Trash2, Loader2, X, Sparkles, Tag } from 'lucide-react'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
-import { createRecipe, updateRecipe } from '@/app/(dashboard)/recipes/actions'
+import { createRecipe, updateRecipe, getUserTags, detectRecipeTags } from '@/app/(dashboard)/recipes/actions'
 import type { RecipeWithParsedFields } from '@/types/recipe'
 
 interface RecipeFormProps {
@@ -23,11 +23,17 @@ interface RecipeFormProps {
 export function RecipeForm({ recipe, mode }: RecipeFormProps) {
   const router = useRouter()
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [tagInput, setTagInput] = useState('')
+  const [availableTags, setAvailableTags] = useState<string[]>([])
+  const [showCreateTag, setShowCreateTag] = useState(false)
+  const [isDetectingTags, setIsDetectingTags] = useState(false)
 
   const {
     register,
     control,
     handleSubmit,
+    watch,
+    setValue,
     formState: { errors },
   } = useForm<RecipeFormValues>({
     resolver: zodResolver(recipeFormSchema),
@@ -72,6 +78,78 @@ export function RecipeForm({ recipe, mode }: RecipeFormProps) {
     control,
     name: 'instructions',
   })
+
+  const tags = watch('tags') || []
+  const formValues = watch()
+
+  // Fetch available tags on mount
+  useEffect(() => {
+    const fetchTags = async () => {
+      const result = await getUserTags()
+      if (result.success) {
+        setAvailableTags(result.data)
+      }
+    }
+    fetchTags()
+  }, [])
+
+  const toggleTag = (tag: string) => {
+    if (tags.includes(tag)) {
+      setValue('tags', tags.filter(t => t !== tag))
+    } else {
+      setValue('tags', [...tags, tag])
+    }
+  }
+
+  const addTag = () => {
+    const trimmedTag = tagInput.trim().toLowerCase()
+    if (trimmedTag && !tags.includes(trimmedTag)) {
+      setValue('tags', [...tags, trimmedTag])
+      // Add to available tags if it's new
+      if (!availableTags.includes(trimmedTag)) {
+        setAvailableTags([...availableTags, trimmedTag].sort())
+      }
+      setTagInput('')
+      setShowCreateTag(false)
+    }
+  }
+
+  const handleTagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      addTag()
+    }
+  }
+
+  const handleDetectTags = async () => {
+    setIsDetectingTags(true)
+    try {
+      const result = await detectRecipeTags({
+        title: formValues.title,
+        description: formValues.description,
+        ingredients: formValues.ingredients,
+        instructions: formValues.instructions,
+      })
+
+      if (result.success && result.data.length > 0) {
+        // Add detected tags to current tags (avoiding duplicates)
+        const newTags = [...new Set([...tags, ...result.data])]
+        setValue('tags', newTags)
+
+        // Add to available tags
+        const updatedAvailable = [...new Set([...availableTags, ...result.data])].sort()
+        setAvailableTags(updatedAvailable)
+
+        toast.success(`Added ${result.data.length} tags based on recipe analysis`)
+      } else {
+        toast.error(result.error || 'Failed to detect tags')
+      }
+    } catch (error) {
+      toast.error('Failed to detect tags')
+    } finally {
+      setIsDetectingTags(false)
+    }
+  }
 
   const onSubmit = async (data: RecipeFormValues) => {
     setIsSubmitting(true)
@@ -189,6 +267,85 @@ export function RecipeForm({ recipe, mode }: RecipeFormProps) {
             />
             {errors.image_url && (
               <p className="text-sm text-destructive">{errors.image_url.message}</p>
+            )}
+          </div>
+
+          {/* Tags */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label>Tags</Label>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDetectTags}
+                  disabled={isDetectingTags || !formValues.title}
+                >
+                  {isDetectingTags ? (
+                    <Loader2 className="h-3 w-3 mr-2 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-3 w-3 mr-2" />
+                  )}
+                  AI Detect
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowCreateTag(!showCreateTag)}
+                >
+                  <Tag className="h-3 w-3 mr-2" />
+                  Create New Tag
+                </Button>
+              </div>
+            </div>
+
+            {/* Create new tag input (hidden by default) */}
+            {showCreateTag && (
+              <div className="flex gap-2">
+                <Input
+                  value={tagInput}
+                  onChange={(e) => setTagInput(e.target.value)}
+                  onKeyDown={handleTagKeyDown}
+                  placeholder="Enter tag name..."
+                  className="h-9"
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={addTag}
+                  disabled={!tagInput.trim()}
+                >
+                  Add
+                </Button>
+              </div>
+            )}
+
+            {/* Available tags (toggleable) */}
+            {availableTags.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {availableTags.map((tag) => (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => toggleTag(tag)}
+                    className={`inline-flex items-center px-3 py-1 rounded-full text-sm transition-colors ${
+                      tags.includes(tag)
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                    }`}
+                  >
+                    {tag}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {availableTags.length === 0 && !showCreateTag && (
+              <p className="text-xs text-muted-foreground">
+                No tags yet. Click "Create New Tag" to add your first tag, or use "AI Detect" to automatically suggest tags.
+              </p>
             )}
           </div>
         </CardContent>

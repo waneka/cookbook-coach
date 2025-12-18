@@ -161,26 +161,52 @@ export async function getRecipes(filters?: {
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
 
-    // Apply search filter
-    if (filters?.search) {
-      query = query.or(`title.ilike.%${filters.search}%,description.ilike.%${filters.search}%`)
-    }
-
-    // Apply tag filter
+    // Apply tag filter (this can be done at DB level)
     if (filters?.tags && filters.tags.length > 0) {
       query = query.overlaps('tags', filters.tags)
-    }
-
-    // Apply limit
-    if (filters?.limit) {
-      query = query.limit(filters.limit)
     }
 
     const { data, error } = await query
 
     if (error) throw error
 
-    return { success: true, data }
+    // Apply search filter client-side to search in title, description, ingredients, and tags
+    let filteredData = data || []
+    if (filters?.search && filteredData.length > 0) {
+      const searchLower = filters.search.toLowerCase()
+      filteredData = filteredData.filter((recipe) => {
+        // Search in title
+        if (recipe.title?.toLowerCase().includes(searchLower)) return true
+
+        // Search in description
+        if (recipe.description?.toLowerCase().includes(searchLower)) return true
+
+        // Search in ingredients
+        if (Array.isArray(recipe.ingredients)) {
+          const ingredientsMatch = recipe.ingredients.some((ingredient: any) => {
+            return ingredient.item?.toLowerCase().includes(searchLower)
+          })
+          if (ingredientsMatch) return true
+        }
+
+        // Search in tags
+        if (Array.isArray(recipe.tags)) {
+          const tagsMatch = recipe.tags.some((tag: string) =>
+            tag.toLowerCase().includes(searchLower)
+          )
+          if (tagsMatch) return true
+        }
+
+        return false
+      })
+    }
+
+    // Apply limit after filtering
+    if (filters?.limit && filteredData.length > filters.limit) {
+      filteredData = filteredData.slice(0, filters.limit)
+    }
+
+    return { success: true, data: filteredData }
   } catch (error) {
     console.error('Get recipes error:', error)
     return {
@@ -212,6 +238,102 @@ export async function getRecipe(id: string) {
       success: false,
       error: error instanceof Error ? error.message : 'Recipe not found',
       data: null,
+    }
+  }
+}
+
+export async function getUserTags() {
+  try {
+    const userId = await getUserId()
+    const supabase = await createClient()
+
+    const { data, error } = await supabase
+      .from('recipes')
+      .select('tags')
+      .eq('user_id', userId)
+
+    if (error) throw error
+
+    // Extract unique tags from all recipes
+    const allTags = new Set<string>()
+    data?.forEach((recipe) => {
+      if (Array.isArray(recipe.tags)) {
+        recipe.tags.forEach((tag) => allTags.add(tag))
+      }
+    })
+
+    return { success: true, data: Array.from(allTags).sort() }
+  } catch (error) {
+    console.error('Get user tags error:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to fetch tags',
+      data: [],
+    }
+  }
+}
+
+export async function detectRecipeTags(recipeData: {
+  title?: string
+  description?: string
+  ingredients?: Array<{ item: string; amount: string; unit?: string }>
+  instructions?: Array<{ value: string }>
+}) {
+  try {
+    const prompt = `Analyze this recipe and suggest 3-5 relevant tags. Tags should be lowercase, single words or hyphenated phrases.
+
+Recipe Title: ${recipeData.title || 'Untitled'}
+Description: ${recipeData.description || 'No description'}
+Ingredients: ${recipeData.ingredients?.map(i => i.item).join(', ') || 'None'}
+Instructions: ${recipeData.instructions?.map(i => i.value).join(' ') || 'None'}
+
+Consider these categories:
+- Cuisine type (italian, mexican, asian, indian, french, etc.)
+- Meal type (breakfast, lunch, dinner, snack, dessert, appetizer)
+- Dietary (vegetarian, vegan, gluten-free, dairy-free, keto, paleo)
+- Cooking method (baked, grilled, fried, roasted, instant-pot, slow-cooker, no-cook)
+- Speed/effort (quick, easy, 30-min, weeknight, weekend)
+- Main ingredient (chicken, beef, pork, fish, pasta, rice, salad)
+- Occasion (holiday, party, comfort-food, healthy)
+
+Return ONLY a JSON array of 3-5 tag strings, nothing else.`
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': process.env.ANTHROPIC_API_KEY!,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 200,
+        messages: [
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
+      }),
+    })
+
+    if (!response.ok) {
+      throw new Error('Failed to detect tags')
+    }
+
+    const data = await response.json()
+    const content = data.content[0].text
+
+    // Parse JSON response
+    const tags = JSON.parse(content.trim())
+
+    return { success: true, data: tags }
+  } catch (error) {
+    console.error('Detect recipe tags error:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to detect tags',
+      data: [],
     }
   }
 }

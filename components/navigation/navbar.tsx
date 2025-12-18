@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { UserButton } from '@clerk/nextjs'
 import { Button } from '@/components/ui/button'
 import { ThemeToggle } from '@/components/theme-toggle'
-import { ChefHat, BookOpen, Calendar, ShoppingCart, MessageSquare } from 'lucide-react'
+import { ChefHat, BookOpen, Calendar, ShoppingCart, MessageSquare, User } from 'lucide-react'
 
 export function Navbar() {
   return (
@@ -39,6 +39,12 @@ export function Navbar() {
               <Link href="/coach">
                 <MessageSquare className="h-4 w-4 mr-2" />
                 AI Coach
+              </Link>
+            </Button>
+            <Button variant="ghost" size="sm" asChild>
+              <Link href="/profile">
+                <User className="h-4 w-4 mr-2" />
+                Profile
               </Link>
             </Button>
           </div>
