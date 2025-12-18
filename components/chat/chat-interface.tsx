@@ -1,18 +1,22 @@
 'use client'
 
 import { useChat } from '@ai-sdk/react'
+import { DefaultChatTransport } from 'ai'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
 import { Send, Loader2 } from 'lucide-react'
-import { useRef, useEffect } from 'react'
+import { useRef, useEffect, useState } from 'react'
 
 export function ChatInterface() {
-  const { messages, input, handleInputChange, handleSubmit, isLoading } = useChat({
-    api: '/api/ai/chat',
+  const { messages, sendMessage, status } = useChat({
+    transport: new DefaultChatTransport({
+      api: '/api/ai/chat',
+    }),
   })
-
+  const [input, setInput] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const isLoading = status === 'streaming' || status === 'submitted'
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -21,6 +25,14 @@ export function ChatInterface() {
   useEffect(() => {
     scrollToBottom()
   }, [messages])
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (input.trim() && status === 'ready') {
+      sendMessage({ text: input })
+      setInput('')
+    }
+  }
 
   return (
     <div className="flex flex-col h-[calc(100vh-12rem)]">
@@ -46,7 +58,13 @@ export function ChatInterface() {
               }`}
             >
               <div className="p-4">
-                <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                {message.parts.map((part, index) =>
+                  part.type === 'text' ? (
+                    <p key={index} className="text-sm whitespace-pre-wrap">
+                      {part.text}
+                    </p>
+                  ) : null
+                )}
               </div>
             </Card>
           </div>
@@ -71,9 +89,10 @@ export function ChatInterface() {
         <div className="flex gap-2">
           <Textarea
             value={input}
-            onChange={handleInputChange}
+            onChange={(e) => setInput(e.target.value)}
             placeholder="Ask about recipes, meal planning, or dietary advice..."
             className="min-h-[60px] max-h-[200px]"
+            disabled={isLoading}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault()
