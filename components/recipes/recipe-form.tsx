@@ -137,7 +137,9 @@ export function RecipeForm({ recipe, mode }: RecipeFormProps) {
                 id="prep_time_minutes"
                 type="number"
                 placeholder="15"
-                {...register('prep_time_minutes', { valueAsNumber: true })}
+                {...register('prep_time_minutes', {
+                  setValueAs: (v) => v === '' || isNaN(Number(v)) ? undefined : Number(v)
+                })}
               />
             </div>
 
@@ -147,7 +149,9 @@ export function RecipeForm({ recipe, mode }: RecipeFormProps) {
                 id="cook_time_minutes"
                 type="number"
                 placeholder="30"
-                {...register('cook_time_minutes', { valueAsNumber: true })}
+                {...register('cook_time_minutes', {
+                  setValueAs: (v) => v === '' || isNaN(Number(v)) ? undefined : Number(v)
+                })}
               />
             </div>
 
