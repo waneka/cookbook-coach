@@ -81,7 +81,7 @@ export function ChatInterface() {
               }
             }}
           />
-          <Button type="submit" disabled={isLoading || !input.trim()} size="icon" className="h-[60px] w-[60px]">
+          <Button type="submit" disabled={isLoading || !input?.trim()} size="icon" className="h-[60px] w-[60px]">
             <Send className="h-4 w-4" />
           </Button>
         </div>
