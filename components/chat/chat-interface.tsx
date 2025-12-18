@@ -92,7 +92,12 @@ export function ChatInterface() {
           </div>
         )}
 
-        {messages.map((message) => (
+        {messages.filter((message) => {
+          // Filter out messages with no displayable content
+          const hasText = message.parts.some((part) => part.type === 'text' && part.text?.trim())
+          const hasToolPart = message.role === 'assistant' && message.parts.some((part) => part.type?.startsWith('tool-'))
+          return hasText || hasToolPart
+        }).map((message) => (
           <div
             key={message.id}
             className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
@@ -105,13 +110,61 @@ export function ChatInterface() {
               }`}
             >
               <div className="p-4">
-                {message.parts.map((part, index) =>
-                  part.type === 'text' ? (
-                    <p key={index} className="text-sm whitespace-pre-wrap">
-                      {part.text}
-                    </p>
-                  ) : null
-                )}
+                {message.parts.map((part, index) => {
+                  if (part.type === 'text') {
+                    return (
+                      <p key={index} className="text-sm whitespace-pre-wrap">
+                        {part.text}
+                      </p>
+                    )
+                  }
+
+                  // Handle tool parts (type starts with "tool-")
+                  if (part.type?.startsWith('tool-') && message.role === 'assistant') {
+                    const toolName = part.type.replace('tool-', '')
+                    const output = (part as any).output
+
+                    return (
+                      <div key={index} className="text-sm space-y-2">
+                        {/* Show what the AI did */}
+                        <div className="flex items-center gap-2 text-muted-foreground italic">
+                          {toolName === 'importRecipe' && '📥 Imported recipe from URL'}
+                          {toolName === 'saveRecipe' && '✓ Saved recipe to your library'}
+                          {toolName === 'searchRecipes' && '🔍 Searched your recipes'}
+                          {toolName === 'fetchWebContent' && '🌐 Fetched web content'}
+                          {toolName === 'updateDietaryPreferences' && '⚙️ Updated dietary preferences'}
+                        </div>
+
+                        {/* Show the result if there's a message */}
+                        {output?.message && (
+                          <p className="text-sm">{output.message}</p>
+                        )}
+
+                        {/* For importRecipe, show a preview of what was imported */}
+                        {toolName === 'importRecipe' && output?.recipe && (
+                          <div className="mt-2 p-3 bg-background rounded border">
+                            <p className="font-medium">{output.recipe.title}</p>
+                            {output.recipe.description && (
+                              <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                                {output.recipe.description}
+                              </p>
+                            )}
+                            <p className="text-xs text-muted-foreground mt-2">
+                              Would you like me to save this to your library?
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Show error if present */}
+                        {output?.error && (
+                          <p className="text-sm text-destructive">{output.error}</p>
+                        )}
+                      </div>
+                    )
+                  }
+
+                  return null
+                })}
               </div>
             </Card>
           </div>

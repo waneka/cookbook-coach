@@ -41,9 +41,9 @@ export const DIETARY_RESTRICTIONS = [
 
 // Dietary preferences schema
 export const dietaryPreferencesSchema = z.object({
-  allergies: z.array(z.string()).default([]),
-  diets: z.array(z.string()).default([]),
-  restrictions: z.array(z.string()).default([]),
+  allergies: z.array(z.string()),
+  diets: z.array(z.string()),
+  restrictions: z.array(z.string()),
 })
 
 // Update dietary preferences schema (for forms)

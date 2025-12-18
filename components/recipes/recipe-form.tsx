@@ -9,10 +9,10 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Plus, Trash2, Loader2, X, Sparkles, Tag } from 'lucide-react'
+import { Plus, Trash2, Loader2, X, Sparkles, Tag, Link2, Wand2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
-import { createRecipe, updateRecipe, getUserTags, detectRecipeTags } from '@/app/(dashboard)/recipes/actions'
+import { createRecipe, updateRecipe, getUserTags, detectRecipeTags, importRecipeFromUrl, generateRecipeFromDescription } from '@/app/(dashboard)/recipes/actions'
 import type { RecipeWithParsedFields } from '@/types/recipe'
 
 interface RecipeFormProps {
@@ -27,6 +27,12 @@ export function RecipeForm({ recipe, mode }: RecipeFormProps) {
   const [availableTags, setAvailableTags] = useState<string[]>([])
   const [showCreateTag, setShowCreateTag] = useState(false)
   const [isDetectingTags, setIsDetectingTags] = useState(false)
+  const [showImportUrl, setShowImportUrl] = useState(false)
+  const [showGenerateAi, setShowGenerateAi] = useState(false)
+  const [importUrl, setImportUrl] = useState('')
+  const [generateDescription, setGenerateDescription] = useState('')
+  const [isImporting, setIsImporting] = useState(false)
+  const [isGenerating, setIsGenerating] = useState(false)
 
   const {
     register,
@@ -151,6 +157,111 @@ export function RecipeForm({ recipe, mode }: RecipeFormProps) {
     }
   }
 
+  const handleImportFromUrl = async () => {
+    if (!importUrl.trim()) {
+      toast.error('Please enter a URL')
+      return
+    }
+
+    setIsImporting(true)
+    try {
+      const result = await importRecipeFromUrl(importUrl)
+
+      if (result.success && result.data) {
+        const recipeData = result.data
+
+        // Populate form fields
+        setValue('title', recipeData.title)
+        setValue('description', recipeData.description || '')
+        setValue('prep_time_minutes', recipeData.prep_time_minutes || undefined)
+        setValue('cook_time_minutes', recipeData.cook_time_minutes || undefined)
+        setValue('servings', recipeData.servings || 4)
+        setValue('source_url', recipeData.source_url || '')
+        setValue('image_url', recipeData.image_url || '')
+
+        // Set ingredients
+        if (recipeData.ingredients && recipeData.ingredients.length > 0) {
+          setValue('ingredients', recipeData.ingredients)
+        }
+
+        // Set instructions
+        if (recipeData.instructions && recipeData.instructions.length > 0) {
+          setValue('instructions', recipeData.instructions.map((inst: string) => ({ value: inst })))
+        }
+
+        // Set tags
+        if (recipeData.tags && recipeData.tags.length > 0) {
+          setValue('tags', recipeData.tags)
+          // Add to available tags
+          const updatedAvailable = [...new Set([...availableTags, ...recipeData.tags])].sort()
+          setAvailableTags(updatedAvailable)
+        }
+
+        toast.success('Recipe imported successfully! Review and edit as needed.')
+        setShowImportUrl(false)
+        setImportUrl('')
+      } else {
+        toast.error(result.error || 'Failed to import recipe')
+      }
+    } catch (error) {
+      toast.error('Failed to import recipe')
+    } finally {
+      setIsImporting(false)
+    }
+  }
+
+  const handleGenerateRecipe = async () => {
+    if (!generateDescription.trim()) {
+      toast.error('Please describe the recipe you want')
+      return
+    }
+
+    setIsGenerating(true)
+    try {
+      const result = await generateRecipeFromDescription(generateDescription)
+
+      if (result.success && result.data) {
+        const recipeData = result.data
+
+        // Populate form fields
+        setValue('title', recipeData.title)
+        setValue('description', recipeData.description || '')
+        setValue('prep_time_minutes', recipeData.prep_time_minutes || undefined)
+        setValue('cook_time_minutes', recipeData.cook_time_minutes || undefined)
+        setValue('servings', recipeData.servings || 4)
+        setValue('image_url', recipeData.image_url || '')
+
+        // Set ingredients
+        if (recipeData.ingredients && recipeData.ingredients.length > 0) {
+          setValue('ingredients', recipeData.ingredients)
+        }
+
+        // Set instructions
+        if (recipeData.instructions && recipeData.instructions.length > 0) {
+          setValue('instructions', recipeData.instructions.map((inst: string) => ({ value: inst })))
+        }
+
+        // Set tags
+        if (recipeData.tags && recipeData.tags.length > 0) {
+          setValue('tags', recipeData.tags)
+          // Add to available tags
+          const updatedAvailable = [...new Set([...availableTags, ...recipeData.tags])].sort()
+          setAvailableTags(updatedAvailable)
+        }
+
+        toast.success('Recipe generated successfully! Review and edit as needed.')
+        setShowGenerateAi(false)
+        setGenerateDescription('')
+      } else {
+        toast.error(result.error || 'Failed to generate recipe')
+      }
+    } catch (error) {
+      toast.error('Failed to generate recipe')
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
   const onSubmit = async (data: RecipeFormValues) => {
     setIsSubmitting(true)
     try {
@@ -176,6 +287,120 @@ export function RecipeForm({ recipe, mode }: RecipeFormProps) {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+      {/* AI Tools - only show in create mode */}
+      {mode === 'create' && (
+        <Card className="bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20">
+          <CardHeader>
+            <CardTitle className="text-lg">Quick Start with AI</CardTitle>
+            <CardDescription>Import a recipe from a URL or generate one with AI</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-wrap gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setShowImportUrl(!showImportUrl)
+                  setShowGenerateAi(false)
+                }}
+              >
+                <Link2 className="h-4 w-4 mr-2" />
+                Import from URL
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setShowGenerateAi(!showGenerateAi)
+                  setShowImportUrl(false)
+                }}
+              >
+                <Wand2 className="h-4 w-4 mr-2" />
+                Generate with AI
+              </Button>
+            </div>
+
+            {/* Import from URL input */}
+            {showImportUrl && (
+              <div className="space-y-3 p-4 bg-background rounded-lg border">
+                <div className="space-y-2">
+                  <Label htmlFor="import-url">Recipe URL</Label>
+                  <Input
+                    id="import-url"
+                    type="url"
+                    placeholder="https://example.com/recipe"
+                    value={importUrl}
+                    onChange={(e) => setImportUrl(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        handleImportFromUrl()
+                      }
+                    }}
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    onClick={handleImportFromUrl}
+                    disabled={isImporting || !importUrl.trim()}
+                  >
+                    {isImporting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Import Recipe
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => {
+                      setShowImportUrl(false)
+                      setImportUrl('')
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Generate with AI input */}
+            {showGenerateAi && (
+              <div className="space-y-3 p-4 bg-background rounded-lg border">
+                <div className="space-y-2">
+                  <Label htmlFor="generate-description">What would you like to make?</Label>
+                  <Textarea
+                    id="generate-description"
+                    placeholder="E.g., 'A healthy vegetarian pasta dish with lots of vegetables' or 'Classic chocolate chip cookies'"
+                    rows={3}
+                    value={generateDescription}
+                    onChange={(e) => setGenerateDescription(e.target.value)}
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    onClick={handleGenerateRecipe}
+                    disabled={isGenerating || !generateDescription.trim()}
+                  >
+                    {isGenerating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Generate Recipe
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => {
+                      setShowGenerateAi(false)
+                      setGenerateDescription('')
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Basic Info */}
       <Card>
         <CardHeader>

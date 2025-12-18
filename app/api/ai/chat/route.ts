@@ -2,7 +2,7 @@ import { anthropic } from '@ai-sdk/anthropic'
 import { streamText, convertToModelMessages, tool, stepCountIs } from 'ai'
 import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
-import { getRecipes, createRecipe } from '@/app/(dashboard)/recipes/actions'
+import { getRecipes, createRecipe, importRecipeFromUrl } from '@/app/(dashboard)/recipes/actions'
 import { updateDietaryPreferences, getUserProfile } from '@/app/(dashboard)/profile/actions'
 import { dietaryPreferencesSchema } from '@/lib/validations/dietary-preferences'
 import { ingredientSchema } from '@/lib/validations/recipe'
@@ -133,6 +133,7 @@ export async function POST(req: Request) {
       }),
       execute: async (recipeData) => {
         try {
+          console.log('[saveRecipe] Starting save for:', recipeData.title)
           // Transform instructions to the format expected by createRecipe
           const formattedData = {
             ...recipeData,
@@ -145,16 +146,71 @@ export async function POST(req: Request) {
           const result = await createRecipe(formattedData as any)
 
           if (result.success) {
+            console.log('[saveRecipe] Success! Recipe ID:', result.data?.id)
             return {
               success: true,
               message: `Recipe "${recipeData.title}" has been saved to your library!`,
               recipeId: result.data?.id,
             }
           } else {
-            return { error: result.error || 'Failed to save recipe' }
+            console.error('[saveRecipe] Failed:', result.error)
+            return {
+              success: false,
+              error: result.error || 'Failed to save recipe'
+            }
           }
         } catch (error) {
-          return { error: `Failed to save recipe: ${error instanceof Error ? error.message : 'Unknown error'}` }
+          console.error('[saveRecipe] Exception:', error)
+          return {
+            success: false,
+            error: `Failed to save recipe: ${error instanceof Error ? error.message : 'Unknown error'}`
+          }
+        }
+      },
+    })
+
+    const importRecipeTool = tool({
+      description: 'Import a recipe from a URL by extracting its data. Use this when the user provides a recipe URL or when you find a recipe URL that might interest them. This tool extracts recipe data but does NOT save it - you must ask permission and use saveRecipe separately.',
+      inputSchema: z.object({
+        url: z.string().url().describe('The URL of the recipe to import'),
+      }),
+      execute: async ({ url }: { url: string }) => {
+        try {
+          console.log('[importRecipe] Starting import from:', url)
+          const result = await importRecipeFromUrl(url)
+
+          if (!result.success || !result.data) {
+            console.error('[importRecipe] Failed:', result.error)
+            return {
+              success: false,
+              error: result.error || 'Failed to import recipe from URL'
+            }
+          }
+
+          console.log('[importRecipe] Success:', result.data.title)
+          // Return the extracted recipe data
+          return {
+            success: true,
+            message: `Successfully imported recipe: ${result.data.title}`,
+            recipe: {
+              title: result.data.title,
+              description: result.data.description,
+              prep_time_minutes: result.data.prep_time_minutes,
+              cook_time_minutes: result.data.cook_time_minutes,
+              servings: result.data.servings,
+              ingredients: result.data.ingredients,
+              instructions: result.data.instructions,
+              tags: result.data.tags,
+              image_url: result.data.image_url,
+              source_url: result.data.source_url,
+            },
+          }
+        } catch (error) {
+          console.error('[importRecipe] Exception:', error)
+          return {
+            success: false,
+            error: `Error importing recipe: ${error instanceof Error ? error.message : 'Unknown error'}`
+          }
         }
       },
     })
@@ -171,13 +227,40 @@ You have access to several tools:
 - searchRecipes: Search the user's recipe library
 - fetchWebContent: Fetch content from websites when users ask you to check dietary guidelines or meal plans
 - updateDietaryPreferences: Update the user's dietary preferences based on their requests
+- importRecipe: Import/extract recipe data from a URL (does NOT save automatically)
 - saveRecipe: Save a recipe to the user's library
 
 IMPORTANT RULES:
 - When users ask you to check a website for dietary guidelines, use the fetchWebContent tool to read the site, then use updateDietaryPreferences to save the guidelines to their profile.
+
+IMPORTING RECIPES FROM URLs - WORKFLOW:
+- If the user EXPLICITLY asks to "save", "import", or "add" a recipe from a URL (e.g., "save this recipe: https://..."):
+  1. Call importRecipe with the URL
+  2. Wait for the result
+  3. IMMEDIATELY call saveRecipe with the extracted recipe data (from importRecipe's output.recipe)
+  4. Both steps happen in the SAME response - do not wait for user confirmation between steps
+  5. This is a TWO-STEP process that you must complete automatically when the user explicitly asks to save
+
+- If a recipe URL comes up ORGANICALLY in conversation (user casually mentions it, or you suggest one without them asking to save):
+  1. Call importRecipe to extract and preview the recipe
+  2. Show the preview and ask: "This looks great! Would you like me to save it to your library?"
+  3. Only call saveRecipe if they confirm
+
+- The importRecipe tool extracts recipe data but does NOT save it. The saveRecipe tool saves it to the library. When user explicitly asks to save from URL, you MUST call BOTH tools in sequence.
+
+SAVING RECIPES:
 - When you create or find a recipe, you can offer to save it. BUT you must ALWAYS ask for explicit permission first. Say something like "Would you like me to save this recipe to your library?" and only call saveRecipe after they confirm.
 - Never save recipes without asking for permission first, even if the user asked you to create one.
-- When saving recipes, ALWAYS try to include an image_url. For AI-generated recipes, you can use Unsplash image URLs (e.g., https://images.unsplash.com/photo-[id]?w=800) for relevant food photos. For recipes from websites, try to extract the image URL from the source.
+- When saving recipes, ALWAYS try to include an image_url. For AI-generated recipes, you can use Unsplash image URLs (e.g., https://images.unsplash.com/photo-[id]?w=800) for relevant food photos. For recipes from websites, the importRecipe tool will provide the image URL.
+
+CRITICAL - ALWAYS RESPOND WITH TEXT:
+After calling ANY tool, you MUST IMMEDIATELY respond with a text message explaining what happened. This is MANDATORY:
+- If importRecipe succeeds: "I've imported the recipe '[Recipe Name]'. Would you like me to save it to your library?"
+- If saveRecipe succeeds: "✓ Successfully saved '[Recipe Name]' to your library!"
+- If searchRecipes returns results: "I found [N] recipes: [list them]"
+- If a tool fails: "Sorry, I encountered an error: [explain the issue]"
+- DO NOT just call a tool and stop. ALWAYS follow up with a text explanation.
+- Every tool call MUST be followed by a user-facing text response in the same turn.
 
 Be friendly, concise, and practical. Focus on actionable advice.
 When discussing recipes, consider nutritional balance, variety, and the user's dietary preferences.`
@@ -208,12 +291,12 @@ When discussing recipes, consider nutritional balance, variety, and the user's d
       messages: convertToModelMessages(messages),
       system: systemPrompt,
       temperature: 0.7,
-      maxTokens: 2000,
-      stopWhen: stepCountIs(5),
+      stopWhen: stepCountIs(10),
       tools: {
         searchRecipes: searchRecipesTool,
         fetchWebContent: fetchWebContentTool,
         updateDietaryPreferences: updateDietaryPreferencesTool,
+        importRecipe: importRecipeTool,
         saveRecipe: saveRecipeTool,
       },
     })
