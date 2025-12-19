@@ -4,6 +4,7 @@ import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
 import { getRecipes, createRecipe, importRecipeFromUrl } from '@/app/(dashboard)/recipes/actions'
 import { updateDietaryPreferences, getUserProfile } from '@/app/(dashboard)/profile/actions'
+import { createMealPlan, getMealPlans, addRecipeToMealSlot } from '@/app/(dashboard)/meal-plans/actions'
 import { dietaryPreferencesSchema } from '@/lib/validations/dietary-preferences'
 import { ingredientSchema } from '@/lib/validations/recipe'
 
@@ -215,6 +216,114 @@ export async function POST(req: Request) {
       },
     })
 
+    const getMealPlansTool = tool({
+      description: 'Get the user\'s meal plans. Use this when the user asks about their existing meal plans or wants to see what meal plans they have.',
+      inputSchema: z.object({}),
+      execute: async () => {
+        try {
+          const result = await getMealPlans()
+
+          if (!result.success || !result.data) {
+            return { error: result.error || 'Failed to fetch meal plans' }
+          }
+
+          return {
+            mealPlans: result.data.map(plan => ({
+              id: plan.id,
+              name: plan.name,
+              start_date: plan.start_date,
+              end_date: plan.end_date,
+              dietary_requirements: plan.dietary_requirements,
+            })),
+            count: result.data.length,
+          }
+        } catch (error) {
+          return { error: `Failed to fetch meal plans: ${error instanceof Error ? error.message : 'Unknown error'}` }
+        }
+      },
+    })
+
+    const createMealPlanTool = tool({
+      description: 'Create a new meal plan for the user. Use this when the user asks to create a meal plan for a specific time period (e.g., "create a meal plan for next week").',
+      inputSchema: z.object({
+        name: z.string().min(1).describe('Name for the meal plan (e.g., "Week of Jan 15")'),
+        start_date: z.string().describe('Start date in YYYY-MM-DD format'),
+        end_date: z.string().describe('End date in YYYY-MM-DD format'),
+        dietary_requirements: z.object({
+          restrictions: z.array(z.string()).optional().describe('Dietary restrictions'),
+          preferences: z.array(z.string()).optional().describe('Dietary preferences'),
+          goals: z.array(z.string()).optional().describe('Dietary goals'),
+        }).optional().describe('Optional dietary requirements for this meal plan'),
+      }),
+      execute: async ({ name, start_date, end_date, dietary_requirements }) => {
+        try {
+          const result = await createMealPlan({
+            name,
+            start_date,
+            end_date,
+            dietary_requirements: dietary_requirements || null,
+          })
+
+          if (result.success) {
+            return {
+              success: true,
+              message: `Meal plan "${name}" created successfully!`,
+              mealPlanId: result.data?.id,
+              mealPlan: {
+                id: result.data?.id,
+                name: result.data?.name,
+                start_date: result.data?.start_date,
+                end_date: result.data?.end_date,
+              },
+            }
+          } else {
+            return { error: result.error || 'Failed to create meal plan' }
+          }
+        } catch (error) {
+          return {
+            error: `Failed to create meal plan: ${error instanceof Error ? error.message : 'Unknown error'}`
+          }
+        }
+      },
+    })
+
+    const addRecipeToMealPlanTool = tool({
+      description: 'Add a recipe to a specific day and meal type in a meal plan. Use this when the user asks to add a recipe to their meal plan (e.g., "add this recipe to Tuesday dinner").',
+      inputSchema: z.object({
+        meal_plan_id: z.string().uuid().describe('ID of the meal plan to add the recipe to'),
+        recipe_id: z.string().uuid().describe('ID of the recipe to add'),
+        date: z.string().describe('Date in YYYY-MM-DD format'),
+        meal_type: z.enum(['breakfast', 'lunch', 'dinner', 'snack']).describe('Type of meal (breakfast, lunch, dinner, or snack)'),
+        servings: z.number().int().min(1).max(100).optional().describe('Number of servings (defaults to 1)'),
+        notes: z.string().max(500).optional().describe('Optional notes for this meal'),
+      }),
+      execute: async ({ meal_plan_id, recipe_id, date, meal_type, servings, notes }) => {
+        try {
+          const result = await addRecipeToMealSlot({
+            meal_plan_id,
+            recipe_id,
+            date,
+            meal_type,
+            servings,
+            notes,
+          })
+
+          if (result.success) {
+            return {
+              success: true,
+              message: `Recipe added to ${meal_type} on ${date}!`,
+            }
+          } else {
+            return { error: result.error || 'Failed to add recipe to meal plan' }
+          }
+        } catch (error) {
+          return {
+            error: `Failed to add recipe to meal plan: ${error instanceof Error ? error.message : 'Unknown error'}`
+          }
+        }
+      },
+    })
+
     // Build system prompt with dietary preferences
     let systemPrompt = `You are a helpful meal planning and cooking assistant. You help users:
 - Plan balanced, healthy meals
@@ -229,9 +338,25 @@ You have access to several tools:
 - updateDietaryPreferences: Update the user's dietary preferences based on their requests
 - importRecipe: Import/extract recipe data from a URL (does NOT save automatically)
 - saveRecipe: Save a recipe to the user's library
+- getMealPlans: View the user's existing meal plans
+- createMealPlan: Create a new meal plan for a date range
+- addRecipeToMealPlan: Add a recipe to a specific day/meal in a meal plan
 
 IMPORTANT RULES:
 - When users ask you to check a website for dietary guidelines, use the fetchWebContent tool to read the site, then use updateDietaryPreferences to save the guidelines to their profile.
+
+MEAL PLANNING WORKFLOW:
+- When users ask to create a meal plan (e.g., "plan my meals for next week"):
+  1. Use createMealPlan to create the meal plan with appropriate start/end dates
+  2. Search their recipe library for suitable recipes
+  3. Ask which recipes they'd like to add to which days
+  4. Use addRecipeToMealPlan to add recipes to specific days and meal types
+- When users ask to add a recipe to a meal plan:
+  1. If they mention a specific meal plan, use that ID
+  2. Otherwise, use getMealPlans to see their existing meal plans and ask which one
+  3. Use addRecipeToMealPlan with the meal_plan_id, recipe_id, date (YYYY-MM-DD), and meal_type (breakfast/lunch/dinner/snack)
+- Meal types are: breakfast, lunch, dinner, snack
+- Dates must be in YYYY-MM-DD format
 
 IMPORTING RECIPES FROM URLs - WORKFLOW:
 - If the user EXPLICITLY asks to "save", "import", or "add" a recipe from a URL (e.g., "save this recipe: https://..."):
@@ -298,6 +423,9 @@ When discussing recipes, consider nutritional balance, variety, and the user's d
         updateDietaryPreferences: updateDietaryPreferencesTool,
         importRecipe: importRecipeTool,
         saveRecipe: saveRecipeTool,
+        getMealPlans: getMealPlansTool,
+        createMealPlan: createMealPlanTool,
+        addRecipeToMealPlan: addRecipeToMealPlanTool,
       },
     })
 
