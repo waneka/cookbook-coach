@@ -19,6 +19,10 @@ export async function POST(req: Request) {
 
     const { messages } = await req.json()
 
+    // Limit conversation history to reduce token usage
+    // Keep only the last 20 messages (10 exchanges) to stay under rate limits
+    const recentMessages = messages.slice(-20)
+
     // Get user profile to include dietary preferences in context
     const profileResult = await getUserProfile()
     const userProfile = profileResult.success ? profileResult.data : null
@@ -49,6 +53,57 @@ export async function POST(req: Request) {
             ingredientCount: Array.isArray(recipe.ingredients) ? recipe.ingredients.length : 0,
           })),
           count: result.data.length,
+        }
+      },
+    })
+
+    const searchWebTool = tool({
+      description: 'Search the web for recipes, dietary guidelines, or cooking information. Use this when the user asks you to find or look up something online (e.g., "find me a recipe for X", "look up dietary guidelines for Y").',
+      inputSchema: z.object({
+        query: z.string().describe('Search query for what to find'),
+        search_depth: z.enum(['basic', 'advanced']).optional().describe('Search depth - use "basic" for quick searches, "advanced" for comprehensive research'),
+      }),
+      execute: async ({ query, search_depth = 'basic' }: { query: string; search_depth?: 'basic' | 'advanced' }) => {
+        try {
+          const tavilyApiKey = process.env.TAVILY_API_KEY
+
+          if (!tavilyApiKey) {
+            return { error: 'Web search is not configured. Please add TAVILY_API_KEY to environment variables.' }
+          }
+
+          const response = await fetch('https://api.tavily.com/search', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              api_key: tavilyApiKey,
+              query,
+              search_depth,
+              max_results: 5,
+              include_answer: true,
+              include_raw_content: false,
+            }),
+          })
+
+          if (!response.ok) {
+            return { error: `Search failed: ${response.statusText}` }
+          }
+
+          const data = await response.json()
+
+          return {
+            query,
+            answer: data.answer, // AI-generated summary of search results
+            results: data.results?.map((r: any) => ({
+              title: r.title,
+              url: r.url,
+              snippet: r.content,
+            })) || [],
+            note: 'You can use fetchWebContent to read full content from any of these URLs if needed.'
+          }
+        } catch (error) {
+          return { error: `Search error: ${error instanceof Error ? error.message : 'Unknown error'}` }
         }
       },
     })
@@ -329,20 +384,33 @@ export async function POST(req: Request) {
 
 TOOLS:
 - searchRecipes: Find recipes in user's library (use this to suggest recipes)
+- searchWeb: Search the web for recipes or dietary info (use when user asks to find/look up something)
+- fetchWebContent: Read URL provided by user (use after searchWeb to get full recipe details)
 - saveRecipe: Save to library (ask permission first, include image_url)
 - importRecipe: Extract from URL (doesn't save, use with saveRecipe)
 - updateDietaryPreferences: Update diet settings
-- fetchWebContent: Read URL provided by user (ONLY use when user gives you a URL)
 - getMealPlans: View saved plans
 - createMealPlan: Create saved plan with name/dates
 - addRecipeToMealPlan: Add recipe to date (meal_plan_id optional, dates YYYY-MM-DD, meal_type: breakfast/lunch/dinner/snack)
 
 WORKFLOWS:
-Finding Recipes: Use searchRecipes to find recipes in the user's library. If no matches, suggest they add recipes or ask if they have a URL to import.
+Finding Recipes in Library: Use searchRecipes to search the user's saved recipes first.
+
+Web Search for Recipes: If user asks to "find" or "look up" a recipe online (e.g., "find me a ginger scallion sauce recipe"):
+1. Use searchWeb with the recipe name
+2. Review search results and pick the best URL
+3. Use fetchWebContent to read the full recipe
+4. Use importRecipe to extract structured data
+5. Ask permission, then saveRecipe
+
+Dietary Guidelines: If user asks to look up dietary guidelines (e.g., "look up keto diet guidelines"):
+1. Use searchWeb to find authoritative sources
+2. Use fetchWebContent on the best URL
+3. Use updateDietaryPreferences to save the guidelines
 
 Meal Planning: Users add recipes directly to dates without creating plans upfront. Use addRecipeToMealPlan with recipe_id, date, meal_type.
 
-Import from URL: If user says "save/import/add this recipe [URL]", call importRecipe then immediately call saveRecipe with the extracted data.
+Import from URL: If user provides a specific URL, call importRecipe then immediately call saveRecipe with the extracted data.
 
 IMPORTANT: Always respond with text after tool calls explaining what happened.`
 
@@ -369,12 +437,13 @@ IMPORTANT: Always respond with text after tool calls explaining what happened.`
 
     const result = streamText({
       model: anthropic('claude-sonnet-4-20250514'),
-      messages: convertToModelMessages(messages),
+      messages: convertToModelMessages(recentMessages),
       system: systemPrompt,
       temperature: 0.7,
       stopWhen: stepCountIs(10),
       tools: {
         searchRecipes: searchRecipesTool,
+        searchWeb: searchWebTool,
         fetchWebContent: fetchWebContentTool,
         updateDietaryPreferences: updateDietaryPreferencesTool,
         importRecipe: importRecipeTool,

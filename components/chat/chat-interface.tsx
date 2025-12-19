@@ -5,7 +5,7 @@ import { DefaultChatTransport } from 'ai'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
-import { Send, Loader2 } from 'lucide-react'
+import { Send, Loader2, Square } from 'lucide-react'
 import { useRef, useEffect, useState } from 'react'
 import {
   createConversation,
@@ -17,7 +17,7 @@ export function ChatInterface() {
   const [conversationId, setConversationId] = useState<string | null>(null)
   const [isInitialized, setIsInitialized] = useState(false)
 
-  const { messages, sendMessage, status, setMessages } = useChat({
+  const { messages, sendMessage, status, setMessages, stop } = useChat({
     transport: new DefaultChatTransport({
       api: '/api/ai/chat',
     }),
@@ -128,6 +128,7 @@ export function ChatInterface() {
                       <div key={index} className="text-sm space-y-2">
                         {/* Show what the AI did */}
                         <div className="flex items-center gap-2 text-muted-foreground italic">
+                          {toolName === 'searchWeb' && '🔎 Searching the web...'}
                           {toolName === 'importRecipe' && '📥 Imported recipe from URL'}
                           {toolName === 'saveRecipe' && '✓ Saved recipe to your library'}
                           {toolName === 'searchRecipes' && '🔍 Searched your recipes'}
@@ -200,9 +201,21 @@ export function ChatInterface() {
               }
             }}
           />
-          <Button type="submit" disabled={isLoading || !input?.trim()} size="icon" className="h-[60px] w-[60px]">
-            <Send className="h-4 w-4" />
-          </Button>
+          {isLoading ? (
+            <Button
+              type="button"
+              onClick={() => stop()}
+              size="icon"
+              className="h-[60px] w-[60px]"
+              variant="destructive"
+            >
+              <Square className="h-4 w-4" />
+            </Button>
+          ) : (
+            <Button type="submit" disabled={!input?.trim()} size="icon" className="h-[60px] w-[60px]">
+              <Send className="h-4 w-4" />
+            </Button>
+          )}
         </div>
         <p className="text-xs text-muted-foreground mt-2">
           Press Enter to send, Shift+Enter for new line
