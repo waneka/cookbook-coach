@@ -42,7 +42,13 @@ export default async function MealPlanPage({ params }: MealPlanPageProps) {
         </div>
       </div>
 
-      <DragDropMealPlanner mealPlan={mealPlan} />
+      <DragDropMealPlanner
+        items={mealPlan.items}
+        mealPlanId={mealPlan.id}
+        mealPlanName={mealPlan.name}
+        startDate={mealPlan.start_date}
+        endDate={mealPlan.end_date}
+      />
     </div>
   )
 }

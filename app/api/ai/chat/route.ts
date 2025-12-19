@@ -54,7 +54,7 @@ export async function POST(req: Request) {
     })
 
     const fetchWebContentTool = tool({
-      description: 'Fetch and read content from a website URL. Use this when the user asks you to check a website for dietary guidelines, recipes, or meal plans.',
+      description: 'Fetch and read content from a specific URL provided by the user. ONLY use this when the user gives you a URL to read. DO NOT use this to search for recipes.',
       inputSchema: z.object({
         url: z.string().url().describe('The URL of the website to fetch'),
         purpose: z.string().describe('What you\'re looking for on this page (e.g., "dietary guidelines", "meal plan details")'),
@@ -288,9 +288,9 @@ export async function POST(req: Request) {
     })
 
     const addRecipeToMealPlanTool = tool({
-      description: 'Add a recipe to a specific day and meal type in a meal plan. Use this when the user asks to add a recipe to their meal plan (e.g., "add this recipe to Tuesday dinner").',
+      description: 'Add a recipe to a specific day and meal type. Use this when the user asks to add a recipe to a specific date (e.g., "add this recipe to Tuesday dinner"). The meal_plan_id is optional - only provide it if the user is working with a specific saved meal plan.',
       inputSchema: z.object({
-        meal_plan_id: z.string().uuid().describe('ID of the meal plan to add the recipe to'),
+        meal_plan_id: z.string().uuid().optional().describe('Optional ID of a saved meal plan. Leave empty for regular calendar-based meal planning.'),
         recipe_id: z.string().uuid().describe('ID of the recipe to add'),
         date: z.string().describe('Date in YYYY-MM-DD format'),
         meal_type: z.enum(['breakfast', 'lunch', 'dinner', 'snack']).describe('Type of meal (breakfast, lunch, dinner, or snack)'),
@@ -300,7 +300,7 @@ export async function POST(req: Request) {
       execute: async ({ meal_plan_id, recipe_id, date, meal_type, servings, notes }) => {
         try {
           const result = await addRecipeToMealSlot({
-            meal_plan_id,
+            meal_plan_id: meal_plan_id || null,
             recipe_id,
             date,
             meal_type,
@@ -314,81 +314,37 @@ export async function POST(req: Request) {
               message: `Recipe added to ${meal_type} on ${date}!`,
             }
           } else {
-            return { error: result.error || 'Failed to add recipe to meal plan' }
+            return { error: result.error || 'Failed to add recipe' }
           }
         } catch (error) {
           return {
-            error: `Failed to add recipe to meal plan: ${error instanceof Error ? error.message : 'Unknown error'}`
+            error: `Failed to add recipe: ${error instanceof Error ? error.message : 'Unknown error'}`
           }
         }
       },
     })
 
     // Build system prompt with dietary preferences
-    let systemPrompt = `You are a helpful meal planning and cooking assistant. You help users:
-- Plan balanced, healthy meals
-- Discover new recipes from their library
-- Understand dietary needs and restrictions
-- Organize their meal planning
-- Get cooking tips and substitutions
+    let systemPrompt = `You are a meal planning assistant. Help users plan meals, manage recipes, and respect dietary needs.
 
-You have access to several tools:
-- searchRecipes: Search the user's recipe library
-- fetchWebContent: Fetch content from websites when users ask you to check dietary guidelines or meal plans
-- updateDietaryPreferences: Update the user's dietary preferences based on their requests
-- importRecipe: Import/extract recipe data from a URL (does NOT save automatically)
-- saveRecipe: Save a recipe to the user's library
-- getMealPlans: View the user's existing meal plans
-- createMealPlan: Create a new meal plan for a date range
-- addRecipeToMealPlan: Add a recipe to a specific day/meal in a meal plan
+TOOLS:
+- searchRecipes: Find recipes in user's library (use this to suggest recipes)
+- saveRecipe: Save to library (ask permission first, include image_url)
+- importRecipe: Extract from URL (doesn't save, use with saveRecipe)
+- updateDietaryPreferences: Update diet settings
+- fetchWebContent: Read URL provided by user (ONLY use when user gives you a URL)
+- getMealPlans: View saved plans
+- createMealPlan: Create saved plan with name/dates
+- addRecipeToMealPlan: Add recipe to date (meal_plan_id optional, dates YYYY-MM-DD, meal_type: breakfast/lunch/dinner/snack)
 
-IMPORTANT RULES:
-- When users ask you to check a website for dietary guidelines, use the fetchWebContent tool to read the site, then use updateDietaryPreferences to save the guidelines to their profile.
+WORKFLOWS:
+Finding Recipes: Use searchRecipes to find recipes in the user's library. If no matches, suggest they add recipes or ask if they have a URL to import.
 
-MEAL PLANNING WORKFLOW:
-- When users ask to create a meal plan (e.g., "plan my meals for next week"):
-  1. Use createMealPlan to create the meal plan with appropriate start/end dates
-  2. Search their recipe library for suitable recipes
-  3. Ask which recipes they'd like to add to which days
-  4. Use addRecipeToMealPlan to add recipes to specific days and meal types
-- When users ask to add a recipe to a meal plan:
-  1. If they mention a specific meal plan, use that ID
-  2. Otherwise, use getMealPlans to see their existing meal plans and ask which one
-  3. Use addRecipeToMealPlan with the meal_plan_id, recipe_id, date (YYYY-MM-DD), and meal_type (breakfast/lunch/dinner/snack)
-- Meal types are: breakfast, lunch, dinner, snack
-- Dates must be in YYYY-MM-DD format
+Meal Planning: Users add recipes directly to dates without creating plans upfront. Use addRecipeToMealPlan with recipe_id, date, meal_type.
 
-IMPORTING RECIPES FROM URLs - WORKFLOW:
-- If the user EXPLICITLY asks to "save", "import", or "add" a recipe from a URL (e.g., "save this recipe: https://..."):
-  1. Call importRecipe with the URL
-  2. Wait for the result
-  3. IMMEDIATELY call saveRecipe with the extracted recipe data (from importRecipe's output.recipe)
-  4. Both steps happen in the SAME response - do not wait for user confirmation between steps
-  5. This is a TWO-STEP process that you must complete automatically when the user explicitly asks to save
+Import from URL: If user says "save/import/add this recipe [URL]", call importRecipe then immediately call saveRecipe with the extracted data.
 
-- If a recipe URL comes up ORGANICALLY in conversation (user casually mentions it, or you suggest one without them asking to save):
-  1. Call importRecipe to extract and preview the recipe
-  2. Show the preview and ask: "This looks great! Would you like me to save it to your library?"
-  3. Only call saveRecipe if they confirm
-
-- The importRecipe tool extracts recipe data but does NOT save it. The saveRecipe tool saves it to the library. When user explicitly asks to save from URL, you MUST call BOTH tools in sequence.
-
-SAVING RECIPES:
-- When you create or find a recipe, you can offer to save it. BUT you must ALWAYS ask for explicit permission first. Say something like "Would you like me to save this recipe to your library?" and only call saveRecipe after they confirm.
-- Never save recipes without asking for permission first, even if the user asked you to create one.
-- When saving recipes, ALWAYS try to include an image_url. For AI-generated recipes, you can use Unsplash image URLs (e.g., https://images.unsplash.com/photo-[id]?w=800) for relevant food photos. For recipes from websites, the importRecipe tool will provide the image URL.
-
-CRITICAL - ALWAYS RESPOND WITH TEXT:
-After calling ANY tool, you MUST IMMEDIATELY respond with a text message explaining what happened. This is MANDATORY:
-- If importRecipe succeeds: "I've imported the recipe '[Recipe Name]'. Would you like me to save it to your library?"
-- If saveRecipe succeeds: "✓ Successfully saved '[Recipe Name]' to your library!"
-- If searchRecipes returns results: "I found [N] recipes: [list them]"
-- If a tool fails: "Sorry, I encountered an error: [explain the issue]"
-- DO NOT just call a tool and stop. ALWAYS follow up with a text explanation.
-- Every tool call MUST be followed by a user-facing text response in the same turn.
-
-Be friendly, concise, and practical. Focus on actionable advice.
-When discussing recipes, consider nutritional balance, variety, and the user's dietary preferences.`
+IMPORTANT: Always respond with text after tool calls explaining what happened.`
 
     // Add dietary preferences context if available
     if (userProfile?.dietary_preferences || userProfile?.dietary_notes) {

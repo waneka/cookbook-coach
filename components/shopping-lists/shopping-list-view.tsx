@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { Plus, Trash2, Copy, Check, ChevronDown, ChevronRight } from 'lucide-react'
 import { updateItemChecked, addItemToShoppingList, deleteItemFromShoppingList } from '@/app/(dashboard)/shopping-lists/actions'
@@ -27,10 +27,52 @@ const CATEGORY_LABELS: Record<ItemCategory, string> = {
   other: '📦 Other',
 }
 
+// Auto-categorize items based on keywords
+function categorizeItem(ingredient: string): ItemCategory {
+  const lower = ingredient.toLowerCase()
+
+  // Produce
+  if (/(apple|banana|orange|lemon|lime|avocado|tomato|lettuce|spinach|kale|carrot|celery|onion|garlic|potato|pepper|cucumber|broccoli|cauliflower|zucchini|squash|berry|berries|fruit|vegetable|herb|parsley|cilantro|basil|thyme|rosemary)/i.test(lower)) {
+    return 'produce'
+  }
+
+  // Meat & Seafood
+  if (/(chicken|beef|pork|turkey|lamb|fish|salmon|tuna|shrimp|steak|ground|sausage|bacon|ham|meat|seafood)/i.test(lower)) {
+    return 'meat'
+  }
+
+  // Dairy & Eggs
+  if (/(milk|cream|butter|cheese|yogurt|egg|sour cream|cottage cheese|cream cheese)/i.test(lower)) {
+    return 'dairy'
+  }
+
+  // Frozen
+  if (/(frozen|ice cream|popsicle)/i.test(lower)) {
+    return 'frozen'
+  }
+
+  // Bakery
+  if (/(bread|bun|roll|bagel|tortilla|pita|croissant|muffin|donut|cake|pastry)/i.test(lower)) {
+    return 'bakery'
+  }
+
+  // Beverages
+  if (/(water|juice|soda|coffee|tea|beer|wine|liquor|drink)/i.test(lower)) {
+    return 'beverages'
+  }
+
+  // Pantry
+  if (/(rice|pasta|flour|sugar|salt|pepper|oil|vinegar|sauce|spice|bean|lentil|cereal|oat|nut|seed|can|jar|box|bag)/i.test(lower)) {
+    return 'pantry'
+  }
+
+  return 'other'
+}
+
 export function ShoppingListView({ shoppingList }: ShoppingListViewProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const [newItem, setNewItem] = useState('')
+  const [newItems, setNewItems] = useState('')
   const [copiedToClipboard, setCopiedToClipboard] = useState(false)
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set())
 
@@ -65,24 +107,48 @@ export function ShoppingListView({ shoppingList }: ShoppingListViewProps) {
     })
   }
 
-  const handleAddItem = async (e: React.FormEvent) => {
+  const handleAddItems = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!newItem.trim()) return
+    if (!newItems.trim()) return
+
+    // Split by newlines and filter out empty lines
+    const itemList = newItems
+      .split('\n')
+      .map(item => item.trim())
+      .filter(item => item.length > 0)
+
+    if (itemList.length === 0) return
 
     startTransition(async () => {
-      const result = await addItemToShoppingList({
-        shopping_list_id: shoppingList.id,
-        item: {
-          ingredient: newItem.trim(),
-        },
-      })
+      let successCount = 0
+      let errorCount = 0
 
-      if (result.success) {
-        setNewItem('')
-        toast.success('Item added')
+      // Add each item with auto-categorization
+      for (const ingredient of itemList) {
+        const category = categorizeItem(ingredient)
+        const result = await addItemToShoppingList({
+          shopping_list_id: shoppingList.id,
+          item: {
+            ingredient,
+            category,
+          },
+        })
+
+        if (result.success) {
+          successCount++
+        } else {
+          errorCount++
+        }
+      }
+
+      if (successCount > 0) {
+        setNewItems('')
+        toast.success(`Added ${successCount} item${successCount > 1 ? 's' : ''}`)
         router.refresh()
-      } else {
-        toast.error(result.error || 'Failed to add item')
+      }
+
+      if (errorCount > 0) {
+        toast.error(`Failed to add ${errorCount} item${errorCount > 1 ? 's' : ''}`)
       }
     })
   }
@@ -151,23 +217,30 @@ export function ShoppingListView({ shoppingList }: ShoppingListViewProps) {
         </Button>
       </div>
 
-      {/* Add new item form */}
+      {/* Add new items form */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Add Item</CardTitle>
+          <CardTitle className="text-base">Add Items</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Add multiple items (one per line)
+          </p>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleAddItem} className="flex gap-2">
-            <Input
-              placeholder="e.g., Bananas, Milk, etc."
-              value={newItem}
-              onChange={(e) => setNewItem(e.target.value)}
+          <form onSubmit={handleAddItems} className="space-y-2">
+            <Textarea
+              placeholder="e.g., Bananas&#10;Milk&#10;Bread"
+              value={newItems}
+              onChange={(e) => setNewItems(e.target.value)}
               disabled={isPending}
+              className="min-h-[80px] resize-none"
+              rows={3}
             />
-            <Button type="submit" disabled={isPending || !newItem.trim()}>
-              <Plus className="h-4 w-4 mr-2" />
-              Add
-            </Button>
+            <div className="flex justify-end">
+              <Button type="submit" disabled={isPending || !newItems.trim()}>
+                <Plus className="h-4 w-4 mr-2" />
+                Add {newItems.split('\n').filter(i => i.trim()).length > 1 ? 'Items' : 'Item'}
+              </Button>
+            </div>
           </form>
         </CardContent>
       </Card>

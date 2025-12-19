@@ -22,7 +22,7 @@ import { Loader2, Search } from 'lucide-react'
 import Image from 'next/image'
 
 interface AddRecipeDialogProps {
-  mealPlanId: string
+  mealPlanId: string | null
   date: string
   mealType: MealType
   open: boolean
@@ -70,7 +70,7 @@ export function AddRecipeDialog({
       })
 
       if (result.success) {
-        toast.success('Recipe added to meal plan')
+        toast.success('Recipe added')
         onOpenChange(false)
         router.refresh()
       } else {

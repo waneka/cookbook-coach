@@ -411,6 +411,78 @@ export async function generateShoppingListFromMealPlan(mealPlanId: string) {
   }
 }
 
+// Generate shopping list from a date range (for calendar-based meal planning)
+export async function generateShoppingListFromDateRange(startDate: string, endDate: string, name?: string) {
+  try {
+    const userId = await getUserId()
+    const supabase = await createClient()
+
+    // Get meal plan items with recipes in the date range
+    const { data: items, error: itemsError } = await supabase
+      .from('meal_plan_items')
+      .select(`
+        *,
+        recipe:recipes(
+          id,
+          title,
+          ingredients
+        )
+      `)
+      .eq('user_id', userId)
+      .gte('date', startDate)
+      .lte('date', endDate)
+      .order('date', { ascending: true })
+
+    if (itemsError) throw itemsError
+
+    // Extract recipes with ingredients and dates
+    const recipes = items
+      .filter((item: any) => item.recipe && item.recipe.ingredients)
+      .map((item: any) => ({
+        id: item.recipe.id,
+        ingredients: item.recipe.ingredients as Ingredient[],
+        date: item.date,
+      }))
+
+    if (recipes.length === 0) {
+      throw new Error('No recipes found in this date range')
+    }
+
+    // Aggregate ingredients
+    const aggregatedItems = aggregateIngredients(recipes)
+
+    // Format date range for list name
+    const formattedStartDate = new Date(startDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    const formattedEndDate = new Date(endDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    const defaultName = `Shopping List (${formattedStartDate} - ${formattedEndDate})`
+
+    // Create shopping list
+    const { data: shoppingList, error } = await supabase
+      .from('shopping_lists')
+      .insert({
+        user_id: userId,
+        meal_plan_id: null, // Not tied to a specific plan
+        name: name || defaultName,
+        items: aggregatedItems as any,
+        status: 'active',
+      })
+      .select()
+      .single()
+
+    if (error) throw error
+
+    revalidatePath('/shopping-lists')
+    revalidatePath('/meal-plans')
+    return { success: true, data: shoppingList }
+  } catch (error) {
+    console.error('Generate shopping list from date range error:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to generate shopping list',
+    }
+  }
+}
+
 export async function updateShoppingList(id: string, data: UpdateShoppingListValues) {
   try {
     const validated = updateShoppingListSchema.parse(data)

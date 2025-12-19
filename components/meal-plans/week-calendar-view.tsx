@@ -59,7 +59,7 @@ export function WeekCalendarView({ mealPlan, activeDayId, activeRecipe }: WeekCa
           key={date}
           date={date}
           items={itemsByDate[date]}
-          mealPlanId={mealPlan.id}
+          mealPlanId={mealPlan.id === 'calendar' ? null : mealPlan.id}
           isOver={activeDayId === date}
           isDragging={!!activeRecipe}
         />

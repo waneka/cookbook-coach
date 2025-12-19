@@ -28,7 +28,8 @@ export type MealPlanFormValues = z.infer<typeof mealPlanFormSchema>
 
 // Meal plan item schema
 export const mealPlanItemSchema = z.object({
-  meal_plan_id: z.string().uuid(),
+  user_id: z.string().uuid(),
+  meal_plan_id: z.string().uuid().nullable().optional(),
   recipe_id: z.string().uuid().nullable().optional(),
   date: z.string().min(1, 'Date is required'),
   meal_type: z.enum(MEAL_TYPES, {
@@ -41,9 +42,9 @@ export const mealPlanItemSchema = z.object({
 
 export type MealPlanItemFormValues = z.infer<typeof mealPlanItemSchema>
 
-// Schema for adding a recipe to a meal slot
+// Schema for adding a recipe to a meal slot (meal_plan_id is optional now)
 export const addRecipeToMealSlotSchema = z.object({
-  meal_plan_id: z.string().uuid(),
+  meal_plan_id: z.string().uuid().nullable().optional(),
   recipe_id: z.string().uuid(),
   date: z.string().min(1, 'Date is required'),
   meal_type: z.enum(MEAL_TYPES),

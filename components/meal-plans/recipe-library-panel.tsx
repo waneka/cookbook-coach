@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { Search, ChevronDown, ChevronUp } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
+import { Search, ChevronDown, ChevronUp, X } from 'lucide-react'
 import { DraggableRecipeCard } from './draggable-recipe-card'
 import { getRecipes } from '@/app/(dashboard)/recipes/actions'
 import type { Recipe } from '@/types/recipe'
@@ -18,6 +19,7 @@ interface RecipeLibraryPanelProps {
 export function RecipeLibraryPanel({ isCollapsed, onToggleCollapse }: RecipeLibraryPanelProps) {
   const [recipes, setRecipes] = useState<Recipe[]>([])
   const [searchQuery, setSearchQuery] = useState('')
+  const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -33,14 +35,36 @@ export function RecipeLibraryPanel({ isCollapsed, onToggleCollapse }: RecipeLibr
     setLoading(false)
   }
 
-  const filteredRecipes = recipes.filter((recipe) => {
-    if (!searchQuery) return true
-    const query = searchQuery.toLowerCase()
-    return (
-      recipe.title.toLowerCase().includes(query) ||
-      recipe.description?.toLowerCase().includes(query) ||
-      recipe.tags?.some((tag) => tag.toLowerCase().includes(query))
+  // Get all unique tags from recipes
+  const allTags = Array.from(
+    new Set(recipes.flatMap((recipe) => recipe.tags || []))
+  ).sort()
+
+  const toggleTag = (tag: string) => {
+    setSelectedTags((prev) =>
+      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
     )
+  }
+
+  const filteredRecipes = recipes.filter((recipe) => {
+    // Text search filter
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase()
+      const matchesSearch =
+        recipe.title.toLowerCase().includes(query) ||
+        recipe.description?.toLowerCase().includes(query) ||
+        recipe.tags?.some((tag) => tag.toLowerCase().includes(query))
+      if (!matchesSearch) return false
+    }
+
+    // Tag filter
+    if (selectedTags.length > 0) {
+      const recipeTags = recipe.tags || []
+      const matchesTags = selectedTags.some((tag) => recipeTags.includes(tag))
+      if (!matchesTags) return false
+    }
+
+    return true
   })
 
   return (
@@ -81,13 +105,32 @@ export function RecipeLibraryPanel({ isCollapsed, onToggleCollapse }: RecipeLibr
             />
           </div>
 
+          {/* Tag filters */}
+          {allTags.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {allTags.map((tag) => (
+                <Badge
+                  key={tag}
+                  variant={selectedTags.includes(tag) ? 'default' : 'outline'}
+                  className="cursor-pointer text-xs"
+                  onClick={() => toggleTag(tag)}
+                >
+                  {tag}
+                  {selectedTags.includes(tag) && (
+                    <X className="h-3 w-3 ml-1" />
+                  )}
+                </Badge>
+              ))}
+            </div>
+          )}
+
           {loading ? (
             <div className="text-center py-8 text-muted-foreground">
               Loading recipes...
             </div>
           ) : filteredRecipes.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
-              {searchQuery ? 'No recipes found' : 'No recipes yet'}
+              {searchQuery || selectedTags.length > 0 ? 'No recipes found' : 'No recipes yet'}
             </div>
           ) : (
             <ScrollArea className="h-[35vh]">

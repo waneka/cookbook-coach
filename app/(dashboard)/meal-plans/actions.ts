@@ -207,24 +207,34 @@ export async function addRecipeToMealSlot(data: AddRecipeToMealSlotValues) {
 
     const supabase = await createClient()
 
-    // Verify meal plan ownership
-    const { data: mealPlan } = await supabase
-      .from('meal_plans')
-      .select('user_id')
-      .eq('id', validated.meal_plan_id)
-      .single()
+    // If meal_plan_id is provided, verify ownership
+    if (validated.meal_plan_id) {
+      const { data: mealPlan } = await supabase
+        .from('meal_plans')
+        .select('user_id')
+        .eq('id', validated.meal_plan_id)
+        .single()
 
-    if (!mealPlan || mealPlan.user_id !== userId) {
-      throw new Error('Meal plan not found or unauthorized')
+      if (!mealPlan || mealPlan.user_id !== userId) {
+        throw new Error('Meal plan not found or unauthorized')
+      }
     }
 
     // Get the current max position for this meal slot
-    const { data: existingItems } = await supabase
+    let query = supabase
       .from('meal_plan_items')
       .select('position')
-      .eq('meal_plan_id', validated.meal_plan_id)
+      .eq('user_id', userId)
       .eq('date', validated.date)
       .eq('meal_type', validated.meal_type)
+
+    if (validated.meal_plan_id) {
+      query = query.eq('meal_plan_id', validated.meal_plan_id)
+    } else {
+      query = query.is('meal_plan_id', null)
+    }
+
+    const { data: existingItems } = await query
       .order('position', { ascending: false })
       .limit(1)
 
@@ -235,7 +245,8 @@ export async function addRecipeToMealSlot(data: AddRecipeToMealSlotValues) {
     const { data: mealPlanItem, error } = await supabase
       .from('meal_plan_items')
       .insert({
-        meal_plan_id: validated.meal_plan_id,
+        user_id: userId,
+        meal_plan_id: validated.meal_plan_id || null,
         recipe_id: validated.recipe_id,
         date: validated.date,
         meal_type: validated.meal_type,
@@ -248,7 +259,10 @@ export async function addRecipeToMealSlot(data: AddRecipeToMealSlotValues) {
 
     if (error) throw error
 
-    revalidatePath(`/meal-plans/${validated.meal_plan_id}`)
+    if (validated.meal_plan_id) {
+      revalidatePath(`/meal-plans/${validated.meal_plan_id}`)
+    }
+    revalidatePath('/meal-plans')
     return { success: true, data: mealPlanItem }
   } catch (error) {
     console.error('Add recipe to meal slot error:', error)
@@ -265,22 +279,16 @@ export async function updateMealPlanItem(itemId: string, data: Partial<MealPlanI
     const userId = await getUserId()
     const supabase = await createClient()
 
-    // Verify ownership through meal plan
+    // Verify ownership directly through user_id
     const { data: item } = await supabase
       .from('meal_plan_items')
-      .select('meal_plan_id')
+      .select('user_id, meal_plan_id')
       .eq('id', itemId)
       .single()
 
     if (!item) throw new Error('Meal plan item not found')
 
-    const { data: mealPlan } = await supabase
-      .from('meal_plans')
-      .select('user_id')
-      .eq('id', item.meal_plan_id)
-      .single()
-
-    if (!mealPlan || mealPlan.user_id !== userId) {
+    if (item.user_id !== userId) {
       throw new Error('Unauthorized')
     }
 
@@ -293,7 +301,10 @@ export async function updateMealPlanItem(itemId: string, data: Partial<MealPlanI
 
     if (error) throw error
 
-    revalidatePath(`/meal-plans/${item.meal_plan_id}`)
+    if (item.meal_plan_id) {
+      revalidatePath(`/meal-plans/${item.meal_plan_id}`)
+    }
+    revalidatePath('/meal-plans')
     return { success: true, data: updatedItem }
   } catch (error) {
     console.error('Update meal plan item error:', error)
@@ -310,22 +321,16 @@ export async function removeMealPlanItem(itemId: string) {
     const userId = await getUserId()
     const supabase = await createClient()
 
-    // Verify ownership through meal plan
+    // Verify ownership directly through user_id
     const { data: item } = await supabase
       .from('meal_plan_items')
-      .select('meal_plan_id')
+      .select('user_id, meal_plan_id')
       .eq('id', itemId)
       .single()
 
     if (!item) throw new Error('Meal plan item not found')
 
-    const { data: mealPlan } = await supabase
-      .from('meal_plans')
-      .select('user_id')
-      .eq('id', item.meal_plan_id)
-      .single()
-
-    if (!mealPlan || mealPlan.user_id !== userId) {
+    if (item.user_id !== userId) {
       throw new Error('Unauthorized')
     }
 
@@ -336,13 +341,47 @@ export async function removeMealPlanItem(itemId: string) {
 
     if (error) throw error
 
-    revalidatePath(`/meal-plans/${item.meal_plan_id}`)
+    if (item.meal_plan_id) {
+      revalidatePath(`/meal-plans/${item.meal_plan_id}`)
+    }
+    revalidatePath('/meal-plans')
     return { success: true }
   } catch (error) {
     console.error('Remove meal plan item error:', error)
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Failed to remove meal plan item',
+    }
+  }
+}
+
+// Get meal plan items by date range (for calendar view and shopping lists)
+export async function getMealPlanItemsByDateRange(startDate: string, endDate: string) {
+  try {
+    const userId = await getUserId()
+    const supabase = await createClient()
+
+    const { data: items, error } = await supabase
+      .from('meal_plan_items')
+      .select(`
+        *,
+        recipe:recipes(id, title, image_url, prep_time_minutes, cook_time_minutes, ingredients)
+      `)
+      .eq('user_id', userId)
+      .gte('date', startDate)
+      .lte('date', endDate)
+      .order('date', { ascending: true })
+      .order('position', { ascending: true })
+
+    if (error) throw error
+
+    return { success: true, data: items as MealPlanItemWithRecipe[] }
+  } catch (error) {
+    console.error('Get meal plan items by date range error:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to fetch meal plan items',
+      data: [],
     }
   }
 }

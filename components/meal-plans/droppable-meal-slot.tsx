@@ -13,7 +13,7 @@ interface DroppableMealSlotProps {
   date: string
   mealType: MealType
   items: MealPlanItemWithRecipe[]
-  mealPlanId: string
+  mealPlanId: string | null
   compact?: boolean
 }
 

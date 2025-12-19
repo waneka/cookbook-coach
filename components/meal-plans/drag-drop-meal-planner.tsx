@@ -3,65 +3,60 @@
 import { useState, useOptimistic, useTransition } from 'react'
 import { DndContext, DragOverlay, DragStartEvent, DragEndEvent, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
 import { Card, CardContent } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 import { WeekCalendarView } from './week-calendar-view'
-import { MonthCalendarView } from './month-calendar-view'
 import { RecipeLibraryPanel } from './recipe-library-panel'
-import { DraggableRecipeCard } from './draggable-recipe-card'
 import { RecipeDragOverlay } from './recipe-drag-overlay'
 import { addRecipeToMealSlot } from '@/app/(dashboard)/meal-plans/actions'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
-import type { MealPlanWithItems, MealType } from '@/types/meal-plan'
+import type { MealPlanItemWithRecipe, MealType } from '@/types/meal-plan'
 import type { Recipe } from '@/types/recipe'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 
 interface DragDropMealPlannerProps {
-  mealPlan: MealPlanWithItems
+  items: MealPlanItemWithRecipe[]
+  mealPlanId: string | null
+  mealPlanName: string
+  startDate: string
+  endDate: string
 }
 
-type CalendarView = 'week' | 'month'
-
-export function DragDropMealPlanner({ mealPlan }: DragDropMealPlannerProps) {
+export function DragDropMealPlanner({
+  items,
+  mealPlanId,
+  mealPlanName,
+  startDate,
+  endDate
+}: DragDropMealPlannerProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const [calendarView, setCalendarView] = useState<CalendarView>('week')
   const [isPanelCollapsed, setIsPanelCollapsed] = useState(false)
   const [activeRecipe, setActiveRecipe] = useState<Recipe | null>(null)
   const [selectedMealType, setSelectedMealType] = useState<MealType | null>(null)
 
-  const [optimisticMealPlan, addOptimisticItem] = useOptimistic(
-    mealPlan,
-    (state, newItem: { recipe: Recipe; date: string; mealType: MealType }) => ({
+  const [optimisticItems, addOptimisticItem] = useOptimistic(
+    items,
+    (state, newItem: { recipe: Recipe; date: string; mealType: MealType }) => [
       ...state,
-      items: [
-        ...state.items,
-        {
-          id: `temp-${Date.now()}`,
-          meal_plan_id: state.id,
-          recipe_id: newItem.recipe.id,
-          date: newItem.date,
-          meal_type: newItem.mealType,
-          servings: 1,
-          notes: null,
-          position: 0,
-          created_at: new Date().toISOString(),
-          recipe: {
-            id: newItem.recipe.id,
-            title: newItem.recipe.title,
-            image_url: newItem.recipe.image_url || undefined,
-            prep_time_minutes: newItem.recipe.prep_time_minutes || undefined,
-            cook_time_minutes: newItem.recipe.cook_time_minutes || undefined,
-          },
+      {
+        id: `temp-${Date.now()}`,
+        user_id: 'temp',
+        meal_plan_id: mealPlanId || 'temp',
+        recipe_id: newItem.recipe.id,
+        date: newItem.date,
+        meal_type: newItem.mealType,
+        servings: 1,
+        notes: null,
+        position: 0,
+        created_at: new Date().toISOString(),
+        recipe: {
+          id: newItem.recipe.id,
+          title: newItem.recipe.title,
+          image_url: newItem.recipe.image_url || undefined,
+          prep_time_minutes: newItem.recipe.prep_time_minutes || undefined,
+          cook_time_minutes: newItem.recipe.cook_time_minutes || undefined,
         },
-      ],
-    })
+      } as MealPlanItemWithRecipe,
+    ]
   )
 
   const sensors = useSensors(
@@ -92,7 +87,7 @@ export function DragDropMealPlanner({ mealPlan }: DragDropMealPlannerProps) {
 
     // Handle drop on week view (has mealType in drop data)
     if (over.data.current?.mealType) {
-      const { date, mealType, mealPlanId } = over.data.current
+      const { date, mealType } = over.data.current
 
       startTransition(async () => {
         // Optimistically add the item
@@ -115,33 +110,15 @@ export function DragDropMealPlanner({ mealPlan }: DragDropMealPlannerProps) {
         }
       })
     }
-    // Handle drop on month view (needs meal type selection)
-    else if (over.data.current?.date && calendarView === 'month') {
-      // For month view, we need to ask which meal type
-      // For now, default to lunch
-      const { date, mealPlanId } = over.data.current
-      const mealType = 'lunch'
+  }
 
-      startTransition(async () => {
-        // Optimistically add the item
-        addOptimisticItem({ recipe, date, mealType })
-
-        const result = await addRecipeToMealSlot({
-          meal_plan_id: mealPlanId,
-          recipe_id: recipe.id,
-          date,
-          meal_type: mealType,
-        })
-
-        if (result.success) {
-          toast.success(`Added ${recipe.title}`)
-          router.refresh()
-        } else {
-          toast.error(result.error || 'Failed to add recipe')
-          router.refresh() // Refresh to remove optimistic update
-        }
-      })
-    }
+  // Create a temporary meal plan object for WeekCalendarView
+  const tempMealPlan = {
+    id: mealPlanId || 'calendar',
+    name: mealPlanName,
+    start_date: startDate,
+    end_date: endDate,
+    items: optimisticItems,
   }
 
   return (
@@ -155,25 +132,13 @@ export function DragDropMealPlanner({ mealPlan }: DragDropMealPlannerProps) {
         <Card className="mb-2">
           <CardContent className="p-3">
             <div className="flex items-center justify-between mb-2">
-              <h2 className="text-xl font-semibold">{optimisticMealPlan.name}</h2>
-              <Select value={calendarView} onValueChange={(value) => setCalendarView(value as CalendarView)}>
-                <SelectTrigger className="w-32">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="week">Week</SelectItem>
-                  <SelectItem value="month">Month</SelectItem>
-                </SelectContent>
-              </Select>
+              <h2 className="text-xl font-semibold">{mealPlanName}</h2>
             </div>
 
-            <div className={isPanelCollapsed ? (calendarView === 'week' ? '' : 'h-[calc(100vh-300px)] overflow-auto') : (calendarView === 'week' ? '' : 'h-[250px] overflow-auto')}>
-              {calendarView === 'week' ? (
-                <WeekCalendarView mealPlan={optimisticMealPlan} activeRecipe={activeRecipe} />
-              ) : (
-                <MonthCalendarView mealPlan={optimisticMealPlan} />
-              )}
-            </div>
+            <WeekCalendarView
+              mealPlan={tempMealPlan as any}
+              activeRecipe={activeRecipe}
+            />
           </CardContent>
         </Card>
 

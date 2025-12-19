@@ -1,13 +1,16 @@
 'use client'
 
-import { Card } from '@/components/ui/card'
+import { useState } from 'react'
+import { Button } from '@/components/ui/button'
+import { Plus } from 'lucide-react'
 import { DroppableMealSlot } from './droppable-meal-slot'
+import { AddRecipeDialog } from './add-recipe-dialog'
 import type { MealPlanItemWithRecipe, MealType } from '@/types/meal-plan'
 
 interface DroppableDayCardProps {
   date: string
   items: MealPlanItemWithRecipe[]
-  mealPlanId: string
+  mealPlanId: string | null
   isOver?: boolean
   isDragging?: boolean
 }
@@ -22,6 +25,14 @@ const MEAL_TYPE_LABELS = {
 }
 
 export function DroppableDayCard({ date, items, mealPlanId, isOver, isDragging }: DroppableDayCardProps) {
+  const [addRecipeDialog, setAddRecipeDialog] = useState<{
+    open: boolean
+    mealType: MealType
+  }>({
+    open: false,
+    mealType: 'lunch',
+  })
+
   const formatDate = (dateString: string) => {
     const d = new Date(dateString + 'T00:00:00')
     return {
@@ -30,7 +41,7 @@ export function DroppableDayCard({ date, items, mealPlanId, isOver, isDragging }
     }
   }
 
-  const { weekday, day } = formatDate(date)
+  const { weekday, day} = formatDate(date)
 
   // Group items by meal type
   const itemsByMealType: Record<MealType, MealPlanItemWithRecipe[]> = {
@@ -71,8 +82,16 @@ export function DroppableDayCard({ date, items, mealPlanId, isOver, isDragging }
           // Show all items grouped when not dragging
           <div className="space-y-0.5 min-h-[100px]">
             {items.length === 0 ? (
-              <div className="text-xs text-muted-foreground text-center py-4">
-                Empty
+              <div className="flex items-center justify-center py-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-16 w-full"
+                  onClick={() => setAddRecipeDialog({ open: true, mealType: 'lunch' })}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Recipe
+                </Button>
               </div>
             ) : (
               MEAL_TYPES.map((mealType) => (
@@ -92,6 +111,15 @@ export function DroppableDayCard({ date, items, mealPlanId, isOver, isDragging }
           </div>
         )}
       </div>
+
+      {/* Add Recipe Dialog */}
+      <AddRecipeDialog
+        mealPlanId={mealPlanId}
+        date={date}
+        mealType={addRecipeDialog.mealType}
+        open={addRecipeDialog.open}
+        onOpenChange={(open) => setAddRecipeDialog({ ...addRecipeDialog, open })}
+      />
     </div>
   )
 }
