@@ -16,7 +16,7 @@ import type {
   UpdateItemCheckedValues,
 } from '@/lib/validations/shopping-list'
 import type { ShoppingListWithParsedFields, ShoppingListItem, ItemCategory } from '@/types/shopping-list'
-import type { RecipeIngredient } from '@/types/recipe'
+import type { Ingredient } from '@/types/recipe'
 
 // Get current user's database ID
 async function getUserId() {
@@ -145,7 +145,7 @@ function categorizeIngredient(ingredient: string): ItemCategory {
 }
 
 // Aggregate ingredients from recipes
-function aggregateIngredients(recipes: Array<{ ingredients: RecipeIngredient[], id: string, date: string }>): ShoppingListItem[] {
+function aggregateIngredients(recipes: Array<{ ingredients: Ingredient[], id: string, date: string }>): ShoppingListItem[] {
   const itemsMap = new Map<string, ShoppingListItem>()
 
   recipes.forEach((recipe) => {
@@ -373,7 +373,7 @@ export async function generateShoppingListFromMealPlan(mealPlanId: string) {
       .filter((item: any) => item.recipe && item.recipe.ingredients)
       .map((item: any) => ({
         id: item.recipe.id,
-        ingredients: item.recipe.ingredients as RecipeIngredient[],
+        ingredients: item.recipe.ingredients as Ingredient[],
         date: item.date,
       }))
 

@@ -19,10 +19,10 @@ export const newShoppingListItemSchema = z.object({
   ingredient: z.string().min(1, 'Ingredient name is required'),
   amount: z.string().optional(),
   unit: z.string().optional(),
-  category: z.enum(ITEM_CATEGORIES).default('other'),
+  category: z.enum(ITEM_CATEGORIES).default('other').optional(),
 })
 
-export type NewShoppingListItemValues = z.infer<typeof newShoppingListItemSchema>
+export type NewShoppingListItemValues = z.input<typeof newShoppingListItemSchema>
 
 // Shopping list creation schema
 export const createShoppingListSchema = z.object({
