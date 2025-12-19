@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { ArrowLeft, Pencil } from 'lucide-react'
 import Link from 'next/link'
 import { DeleteMealPlanButton } from '@/components/meal-plans/delete-meal-plan-button'
+import { GenerateShoppingListButton } from '@/components/meal-plans/generate-shopping-list-button'
 
 interface MealPlanPageProps {
   params: Promise<{ id: string }>
@@ -30,6 +31,7 @@ export default async function MealPlanPage({ params }: MealPlanPageProps) {
         </Button>
         <div className="flex-1" />
         <div className="flex gap-2">
+          <GenerateShoppingListButton mealPlanId={id} />
           <Button variant="outline" size="sm" asChild>
             <Link href={`/meal-plans/${id}/edit`}>
               <Pencil className="h-4 w-4 mr-2" />
