@@ -1,4 +1,5 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { MealPlanForm } from '@/components/meal-plans/meal-plan-form'
 
 export default function NewMealPlanPage() {
   return (
@@ -12,15 +13,10 @@ export default function NewMealPlanPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Coming Soon</CardTitle>
-          <CardDescription>
-            Meal plan creation will be implemented in Phase 4
-          </CardDescription>
+          <CardTitle>Meal Plan Details</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground">
-            This page will feature a weekly calendar view where you can drag and drop recipes or get AI suggestions.
-          </p>
+          <MealPlanForm />
         </CardContent>
       </Card>
     </div>
