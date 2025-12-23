@@ -19,9 +19,22 @@ export async function POST(req: Request) {
 
     const { messages } = await req.json()
 
+    console.log('📨 Received messages count:', messages.length)
+    console.log('📨 Messages structure:', JSON.stringify(messages.slice(-5), null, 2))
+
     // Limit conversation history to reduce token usage
     // Keep only the last 20 messages (10 exchanges) to stay under rate limits
     const recentMessages = messages.slice(-20)
+
+    console.log('📤 Recent messages count:', recentMessages.length)
+    console.log('📤 Recent messages:', JSON.stringify(recentMessages.map((m: any, i: number) => ({
+      index: i,
+      id: m.id,
+      role: m.role,
+      partsCount: m.parts?.length,
+      firstPartType: m.parts?.[0]?.type,
+      hasText: m.parts?.some((p: any) => p.type === 'text' && p.text?.trim()),
+    })), null, 2))
 
     // Get user profile to include dietary preferences in context
     const profileResult = await getUserProfile()

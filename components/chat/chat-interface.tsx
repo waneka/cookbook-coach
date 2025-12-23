@@ -7,17 +7,25 @@ import { Card } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
 import { Send, Loader2, Square } from 'lucide-react'
 import { useRef, useEffect, useState } from 'react'
-import {
-  createConversation,
-  getLatestConversation,
-  updateConversation,
-} from '@/app/(dashboard)/coach/actions'
+import { useRouter } from 'next/navigation'
+import { updateConversation } from '@/app/(dashboard)/coach/actions'
 
-export function ChatInterface() {
-  const [conversationId, setConversationId] = useState<string | null>(null)
-  const [isInitialized, setIsInitialized] = useState(false)
+interface ChatInterfaceProps {
+  initialMessage?: string
+  conversationId: string | null
+  initialMessages: any[]
+}
 
-  const { messages, sendMessage, status, setMessages, stop } = useChat({
+export function ChatInterface({
+  initialMessage,
+  conversationId,
+  initialMessages,
+}: ChatInterfaceProps) {
+  const router = useRouter()
+  const hasSubmittedInitialRef = useRef(false)
+
+  const { messages, sendMessage, status, stop } = useChat({
+    messages: initialMessages,
     transport: new DefaultChatTransport({
       api: '/api/ai/chat',
     }),
@@ -27,41 +35,26 @@ export function ChatInterface() {
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const isLoading = status === 'streaming' || status === 'submitted'
 
-  // Load or create conversation on mount
-  useEffect(() => {
-    const initConversation = async () => {
-      const result = await getLatestConversation()
-
-      if (result.success && result.data) {
-        // Load existing conversation
-        setConversationId(result.data.id)
-        if (result.data.messages && Array.isArray(result.data.messages)) {
-          setMessages(result.data.messages)
-        }
-      } else {
-        // Create new conversation
-        const createResult = await createConversation()
-        if (createResult.success && createResult.data) {
-          setConversationId(createResult.data.id)
-        }
-      }
-
-      setIsInitialized(true)
-    }
-
-    initConversation()
-  }, [])
-
   // Save messages to database when they change
   useEffect(() => {
     const saveMessages = async () => {
-      if (conversationId && isInitialized && messages.length > 0 && !isLoading) {
-        await updateConversation(conversationId, messages)
+      if (conversationId && messages.length > 0 && !isLoading) {
+        // Filter out messages with no displayable content before saving
+        const messagesToSave = messages.filter((message) => {
+          const hasText = message.parts.some((part) => part.type === 'text' && part.text?.trim())
+          const hasToolPart =
+            message.role === 'assistant' &&
+            message.parts.some((part) => part.type?.startsWith('tool-'))
+          return hasText || hasToolPart
+        })
+
+        console.log('💾 Saving messages to database:', messagesToSave.length, 'of', messages.length)
+        await updateConversation(conversationId, messagesToSave)
       }
     }
 
     saveMessages()
-  }, [messages, conversationId, isInitialized, isLoading])
+  }, [messages, conversationId, isLoading])
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -70,6 +63,20 @@ export function ChatInterface() {
   useEffect(() => {
     scrollToBottom()
   }, [messages])
+
+  // Auto-submit initial message from URL query parameter
+  useEffect(() => {
+    if (initialMessage && !hasSubmittedInitialRef.current && status === 'ready') {
+      console.log('✅ Auto-submitting message:', initialMessage)
+      hasSubmittedInitialRef.current = true
+
+      // Send the message directly
+      sendMessage({ text: initialMessage })
+
+      // Clear query params from URL
+      router.replace('/coach', { scroll: false })
+    }
+  }, [initialMessage, status, sendMessage, router])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -92,12 +99,17 @@ export function ChatInterface() {
           </div>
         )}
 
-        {messages.filter((message) => {
-          // Filter out messages with no displayable content
-          const hasText = message.parts.some((part) => part.type === 'text' && part.text?.trim())
-          const hasToolPart = message.role === 'assistant' && message.parts.some((part) => part.type?.startsWith('tool-'))
-          return hasText || hasToolPart
-        }).map((message) => (
+        {messages
+          .filter((message) => {
+            // Filter out messages with no displayable content
+            const hasText = message.parts.some((part) => part.type === 'text' && part.text?.trim())
+            const hasToolPart =
+              message.role === 'assistant' &&
+              message.parts.some((part) => part.type?.startsWith('tool-'))
+            return hasText || hasToolPart
+          })
+          .map((message) => {
+            return (
           <div
             key={message.id}
             className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
@@ -169,7 +181,8 @@ export function ChatInterface() {
               </div>
             </Card>
           </div>
-        ))}
+          )
+        })}
 
         {isLoading && (
           <div className="flex justify-start">

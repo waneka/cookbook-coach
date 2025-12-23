@@ -1,132 +1,64 @@
-import { auth } from '@clerk/nextjs/server'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import Link from 'next/link'
-import { BookOpen, Calendar, ShoppingCart, MessageSquare, Plus } from 'lucide-react'
+import { CommandCenterHero } from '@/components/dashboard/command-center-hero'
+import { ComingUpSection } from '@/components/dashboard/coming-up-section'
+import { QuickAccessSection } from '@/components/dashboard/quick-access-section'
+import { getMealPlanItemsByDateRange } from '@/app/(dashboard)/meal-plans/actions'
+import { getShoppingLists } from '@/app/(dashboard)/shopping-lists/actions'
+import { getRecipes } from '@/app/(dashboard)/recipes/actions'
 
 export default async function DashboardPage() {
-  const { userId } = await auth()
+  // Get next 3 days starting from today
+  const today = new Date()
+  const endDate = new Date(today)
+  endDate.setDate(today.getDate() + 2) // Today + 2 days = 3 days total
+
+  // Fetch upcoming meals
+  const mealsResult = await getMealPlanItemsByDateRange(
+    today.toISOString().split('T')[0],
+    endDate.toISOString().split('T')[0]
+  )
+
+  // Fetch shopping lists
+  const shoppingListsResult = await getShoppingLists()
+
+  // Fetch recent recipes (limit to 5)
+  const recipesResult = await getRecipes({ limit: 5 })
+
+  // Group meals by date
+  const upcomingMeals = []
+  for (let i = 0; i < 3; i++) {
+    const date = new Date(today)
+    date.setDate(today.getDate() + i)
+    const dateString = date.toISOString().split('T')[0]
+
+    const dayMeals = mealsResult.data?.filter((item) => item.date === dateString) || []
+
+    upcomingMeals.push({
+      date: dateString,
+      items: dayMeals,
+    })
+  }
+
+  // Format shopping lists
+  const shoppingLists = shoppingListsResult.data?.map((list) => {
+    const items = Array.isArray(list.items) ? list.items : []
+    const checkedCount = items.filter((item: any) => item.checked).length
+
+    return {
+      id: list.id,
+      name: list.name,
+      itemCount: items.length,
+      checkedCount,
+    }
+  }) || []
+
+  // Get recent recipes
+  const recentRecipes = recipesResult.data || []
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-4xl font-bold tracking-tight">Welcome to Cookbook Coach</h1>
-        <p className="text-muted-foreground mt-2">
-          Your AI-powered meal planning assistant
-        </p>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Recipes</CardTitle>
-            <BookOpen className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">0</div>
-            <p className="text-xs text-muted-foreground">saved recipes</p>
-            <Button size="sm" className="mt-4" asChild>
-              <Link href="/recipes/new">
-                <Plus className="h-4 w-4 mr-2" />
-                Add Recipe
-              </Link>
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Meal Plans</CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">0</div>
-            <p className="text-xs text-muted-foreground">active plans</p>
-            <Button size="sm" className="mt-4" asChild>
-              <Link href="/meal-plans/new">
-                <Plus className="h-4 w-4 mr-2" />
-                New Plan
-              </Link>
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Shopping Lists</CardTitle>
-            <ShoppingCart className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">0</div>
-            <p className="text-xs text-muted-foreground">active lists</p>
-            <Button size="sm" className="mt-4" variant="outline" asChild>
-              <Link href="/shopping-lists">View Lists</Link>
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">AI Coach</CardTitle>
-            <MessageSquare className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground mb-4">
-              Chat with your meal planning assistant
-            </p>
-            <Button size="sm" className="w-full" asChild>
-              <Link href="/coach">
-                <MessageSquare className="h-4 w-4 mr-2" />
-                Start Chat
-              </Link>
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Getting Started</CardTitle>
-          <CardDescription>
-            Get the most out of Cookbook Coach
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-start gap-4">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              1
-            </div>
-            <div className="space-y-1">
-              <p className="font-medium">Add your first recipe</p>
-              <p className="text-sm text-muted-foreground">
-                Import from a URL or manually enter your favorite recipes
-              </p>
-            </div>
-          </div>
-          <div className="flex items-start gap-4">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              2
-            </div>
-            <div className="space-y-1">
-              <p className="font-medium">Chat with your AI coach</p>
-              <p className="text-sm text-muted-foreground">
-                Discuss your dietary preferences and meal planning goals
-              </p>
-            </div>
-          </div>
-          <div className="flex items-start gap-4">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              3
-            </div>
-            <div className="space-y-1">
-              <p className="font-medium">Create your meal plan</p>
-              <p className="text-sm text-muted-foreground">
-                Let AI suggest a balanced weekly meal plan based on your recipes and preferences
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      {/* <CommandCenterHero /> */}
+      <ComingUpSection upcomingMeals={upcomingMeals} />
+      <QuickAccessSection shoppingLists={shoppingLists} recentRecipes={recentRecipes} />
     </div>
   )
 }
